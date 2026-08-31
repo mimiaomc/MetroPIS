@@ -6,7 +6,19 @@
 [![WebSocket](https://img.shields.io/badge/WebSocket-Realtime-blue?style=flat)](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API)
 [![Xi'an Metro](https://img.shields.io/badge/Xi'an_Metro-Lines_2_&_3-e91e63?style=flat)](https://www.xianrail.com/)
 
-一个高拟真度、全动态、工业级架构的**西安地铁站台乘客信息系统（PIDS 站台电视屏幕）**与 **OCC 调度中心集中播控平台**。严格遵循西安地铁官方导向视觉规范、最新站名更名标准与大中小交路套跑运行图。
+一个高拟真度、全动态、工业级架构的**西安地铁站台乘客信息系统**与 **OCC 调度中心集中播控平台**。严格遵循西安地铁官方视觉规范、最新站名更名标准与大中小交路套跑运行图。
+
+---
+
+## 🖼️ 效果演示
+
+| 站台 PIDS 屏幕效果 (3号线) | 站台 PIDS 屏幕效果 (2号线) |
+| :---: | :---: |
+| ![PIDS 截图演示](Demo/Demo1.png) | ![PIDS 大屏演示](Demo/Demo2.jpg) |
+
+| OCC 调度控制中心后台 |
+| :---: |
+| ![OCC 后台演示](Demo/BackendDemo.png) |
 
 ---
 
@@ -43,6 +55,10 @@
 
 ```text
 MetroPIS/
+├── Demo/                   # 效果展示图片
+│   ├── Demo1.png
+│   ├── Demo2.jpg
+│   └── BackendDemo.png
 ├── lines/                  # 线路拓扑与运行图配置库 (JSON)
 │   ├── 2.json              # 西安地铁 2 号线 (草滩 ↔ 常宁宫, 含韦曲南/西安北站交路)
 │   └── 3.json              # 西安地铁 3 号线 (鱼化寨 ↔ 保税区, 含香湖湾交路)
@@ -54,6 +70,7 @@ MetroPIS/
 ├── screen_config.json      # 独立终端屏幕离线配置示例
 ├── requirements.txt        # Python 依赖清单
 ├── .gitignore              # Git 忽略配置
+├── LICENSE                 # AGPL-3.0 开源许可证
 └── README.md               # 项目使用说明文档
 ```
 
