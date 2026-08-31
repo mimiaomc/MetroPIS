@@ -12,13 +12,13 @@
 
 ## 🖼️ 效果演示
 
-| 站台 PIDS 屏幕效果 (3号线) | 站台 PIDS 屏幕效果 (2号线) |
-| :---: | :---: |
-| ![PIDS 截图演示](Demo/Demo1.png) | ![PIDS 大屏演示](Demo/Demo2.jpg) |
-
-| OCC 调度控制中心后台 |
+| 站台 PIDS 屏幕效果 |
 | :---: |
-| ![OCC 后台演示](Demo/BackendDemo.png) |
+| ![PIDS 大屏演示](Demo/Demo2.jpg) |
+
+| OCC 调度控制中心后台 | 站台 PIDS 截图效果 |
+| :---: | :---: |
+| ![OCC 后台演示](Demo/BackendDemo.png) | ![PIDS 截图演示](Demo/Demo1.png) |
 
 ---
 
