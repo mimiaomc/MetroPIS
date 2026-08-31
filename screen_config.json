@@ -1,0 +1,7 @@
+{
+  "line": 3,
+  "station": 0,
+  "platform": 1,
+  "screen": 2,
+  "server_ws": "ws://localhost:8080/ws"
+}
