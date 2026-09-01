@@ -67,6 +67,7 @@ MetroPIS/
 │   └── ...
 ├── index.html              # 站台 PIDS 屏幕前端 (纯原生 HTML5/CSS3/WebSocket, 零外部依赖)
 ├── server.py               # FastAPI 中心 OCC 调度服务器 / WebSocket 总线 / 视频母钟
+├── simulator.py            # 独立 ATS 信号仿真进程 (波浪运行图发生器 / 遥测推送)
 ├── screen_config.json      # 独立终端屏幕离线配置示例
 ├── requirements.txt        # Python 依赖清单
 ├── .gitignore              # Git 忽略配置
@@ -86,7 +87,7 @@ MetroPIS/
 pip install -r requirements.txt
 ```
 
-### 2. 启动中央 OCC 服务器
+### 2. 启动中央 OCC 播控服务器
 
 ```bash
 python3 server.py
@@ -95,6 +96,16 @@ python3 server.py
 服务器启动后，默认监听在 `http://0.0.0.0:8080`：
 - **PIS 站台屏幕前端**：`http://localhost:8080/`
 - **OCC 调度控制中心**：`http://localhost:8080/control`
+
+### 3. 启动独立 ATS 信号仿真器（可选 / 热插拔）
+
+在另一个终端启动行车仿真引擎，自动计算车次物理闭塞、大小交路套跑并实时推送给后端：
+
+```bash
+python3 simulator.py
+```
+
+*(注：不启动 simulator.py 时，OCC 控制台处于纯手动/应急调度模式；启动后自动无缝切换为 ATS 信号在线接入模式)*
 
 ---
 

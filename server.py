@@ -140,147 +140,7 @@ video_state = {
     "is_black": False
 }
 
-# ===== 3. 列车信号系统抽象接口与演示模式仿真引擎 (ATS / CBTC Simulation Engine) =====
-class TrainSignalingSystem:
-    """列车信号系统驱动抽象基类（为后续接入真实 ATS/CBTC 预留标准化接口）"""
-    def get_state(self, station_id: int, platform_id: int) -> dict:
-        raise NotImplementedError
-
-class DemoSimulationSignaling(TrainSignalingSystem):
-    """
-    【演示模式仿真引擎】全线运行图闭环调度（动态由 Line Config JSON 驱动）
-    支持上下行双向多交路（如 2号线 4常宁宫:1韦曲南 / 4草滩:1西安北站；3号线 2保税区:1香湖湾）
-    """
-    def __init__(self, line_config: dict):
-        self.config = line_config
-        self.headway = line_config.get("headway_sec", 180)
-        self.interval = line_config.get("station_interval_sec", 35)
-        self.turnaround_dur = line_config.get("turnaround_dur_sec", 35)
-        self.stop_time = line_config.get("stop_time_sec", 20)
-        
-        self.routing = line_config.get("routing_pattern", {})
-        self.down_seq = self.routing.get("down_sequence") or self.routing.get("sequence", [25, 25, 20])
-        self.start_terminal = self.routing.get("start_terminal", 0)
-        self.up_seq = self.routing.get("up_sequence", [self.start_terminal])
-        
-        self.full_terminal = self.routing.get("full_turn_terminal", 25)
-        self.short_terminal = self.routing.get("short_turn_terminal", 20)
-        self.start_epoch = time.time()
-
-    def get_all_trains(self) -> list:
-        now = time.time()
-        elapsed = now - self.start_epoch
-        trains = []
-
-        # 1. 下行车流 (1号台)
-        k_down_min = int((elapsed - (self.full_terminal + 1) * self.interval) / self.headway)
-        k_down_max = int(elapsed / self.headway) + 1
-
-        for k in range(k_down_min, k_down_max + 1):
-            t_down = elapsed - k * self.headway
-            pos = t_down / self.interval
-            dest = self.down_seq[k % len(self.down_seq)]
-            is_short = (dest != self.full_terminal)
-            
-            # 下行在线区间
-            if 0 <= pos < dest:
-                trains.append({
-                    "id": f"D{k}", "dir": 1, "pos": round(pos, 3),
-                    "dest": dest, "status": "RUNNING", "progress": 0
-                })
-            # 南端终点折返区间
-            elif dest <= pos <= dest + (self.turnaround_dur / self.interval):
-                p = (t_down - dest * self.interval) / self.turnaround_dur
-                dir_type = 4 if is_short else 5
-                trains.append({
-                    "id": f"T{k}", "dir": dir_type, "pos": dest,
-                    "dest": self.start_terminal, "status": "TURNING", "progress": min(1.0, max(0.0, round(p, 3)))
-                })
-
-        # 2. 上行车流 (2号台)
-        m_min = int(elapsed / self.headway)
-        m_max = int((elapsed + (self.full_terminal + 1) * self.interval) / self.headway) + 2
-
-        for m in range(m_min - 2, m_max + 1):
-            orig = self.down_seq[m % len(self.down_seq)]
-            up_dest = self.up_seq[m % len(self.up_seq)]
-            t_dep_orig = m * self.headway - orig * self.interval
-            t_since_dep = elapsed - t_dep_orig
-            pos = orig - (t_since_dep / self.interval)
-
-            # 上行在线区间
-            if up_dest <= pos < orig:
-                trains.append({
-                    "id": f"U{m}", "dir": 2, "pos": round(pos, 3),
-                    "dest": up_dest, "status": "RUNNING", "progress": 0
-                })
-            # 北端终点折返区间 (到达北端终点站后折返)
-            elif up_dest - (self.turnaround_dur / self.interval) <= pos < up_dest:
-                p = (elapsed - (m * self.headway - (orig - up_dest) * self.interval)) / self.turnaround_dur
-                if 0 <= p <= 1.0:
-                    dir_type = 4 if (up_dest != self.start_terminal) else 3
-                    trains.append({
-                        "id": f"T_N_{m}", "dir": dir_type, "pos": up_dest,
-                        "dest": self.full_terminal, "status": "TURNING", "progress": round(p, 3)
-                    })
-
-        return trains
-
-    def get_state(self, station_id: int, platform_id: int) -> dict:
-        now = time.time()
-        elapsed = now - self.start_epoch
-        
-        valid_arrivals = []
-        if platform_id == 1:
-            # 下行预告
-            k_curr = int((elapsed - station_id * self.interval) / self.headway)
-            for k in range(k_curr - 1, k_curr + 6):
-                dest = self.down_seq[k % len(self.down_seq)]
-                if station_id > dest:
-                    continue
-                t_arr = k * self.headway + station_id * self.interval
-                time_to_reach = t_arr - elapsed
-                if time_to_reach >= -self.stop_time:
-                    valid_arrivals.append((time_to_reach, dest))
-        else:
-            # 上行预告
-            m_curr = int((elapsed + station_id * self.interval) / self.headway)
-            for m in range(m_curr - 1, m_curr + 6):
-                orig = self.down_seq[m % len(self.down_seq)]
-                up_dest = self.up_seq[m % len(self.up_seq)]
-                if station_id > orig or station_id < up_dest:
-                    continue
-                t_arr = m * self.headway - station_id * self.interval
-                time_to_reach = t_arr - elapsed
-                if time_to_reach >= -self.stop_time:
-                    valid_arrivals.append((time_to_reach, up_dest))
-
-        valid_arrivals.sort(key=lambda x: x[0])
-        
-        trips = []
-        for time_to_reach, dest in valid_arrivals[:2]:
-            if time_to_reach <= 0:
-                status = "ARRIVED"
-                cd = 0
-            elif time_to_reach <= 30:
-                status = "ARRIVING"
-                cd = 0
-            else:
-                status = "COUNTDOWN"
-                cd = max(1, int(time_to_reach / 60) + 1)
-            trips.append({"dest": dest, "countdown": cd, "status": status})
-            
-        while len(trips) < 2:
-            trips.append({"dest": self.full_terminal if platform_id == 1 else self.start_terminal, "countdown": 99, "status": "NORMAL"})
-            
-        return {
-            "trip1": trips[0],
-            "trip2": trips[1]
-        }
-
-# 实例化各线路仿真引擎与调度仓库
-LINE_ENGINES: Dict[int, DemoSimulationSignaling] = {lid: DemoSimulationSignaling(cfg) for lid, cfg in LINES_REGISTRY.items()}
-
+# ===== 3. 列车运行图与调度状态仓库 (ATS Telemetry & Dispatch Storage) =====
 def init_all_stations_dispatch(line_config: dict):
     st_dict = {}
     stations = line_config.get("stations", [])
@@ -306,11 +166,15 @@ def init_all_stations_dispatch(line_config: dict):
     return st_dict
 
 LINE_DISPATCH: Dict[int, dict] = {lid: init_all_stations_dispatch(cfg) for lid, cfg in LINES_REGISTRY.items()}
+LINE_TRAINS: Dict[int, list] = {lid: [] for lid in LINES_REGISTRY.keys()}
+MANUAL_OVERRIDES: Dict[tuple, dict] = {}
+LAST_ATS_TIMESTAMP: float = 0.0
 
 # 核心全局调度状态
 dispatch_state = {
-    "signaling_mode": "DEMO",  # DEMO: 演示模式, MANUAL: 手动模式, CBTC: 外部系统预留
+    "signaling_mode": "ATS_ONLINE",
     "active_line_id": DEFAULT_LINE_ID,
+    "active_trains": [],
     "stations": LINE_DISPATCH.get(DEFAULT_LINE_ID, {}),
     "global_ticker": f"欢迎乘坐{ACTIVE_LINE.get('name_cn', '西安地铁')}！请先下后上，注意站台间隙。",
     "emergency": {},
@@ -373,6 +237,8 @@ class ConnectionManager:
         t1_meta = line_st_map.get(t1_dest, {"cn": "终点站", "en": "TERMINAL"})
         t2_meta = line_st_map.get(t2_dest, {"cn": "终点站", "en": "TERMINAL"})
 
+        t1_status = station_data["trip1"].get("status", "COUNTDOWN")
+
         return {
             "type": "UPDATE",
             "server_time": int(time.time() * 1000),
@@ -393,7 +259,7 @@ class ConnectionManager:
                 "dest_cn": t1_meta["cn"],
                 "dest_en": t1_meta["en"],
                 "countdown": station_data["trip1"]["countdown"],
-                "status": station_data["trip1"]["status"]
+                "status": t1_status
             },
             "trip2": {
                 "dest_id": t2_dest,
@@ -462,55 +328,13 @@ async def websocket_endpoint(websocket: WebSocket):
         print(f"WebSocket 异常: {e}")
         manager.disconnect(websocket)
 
-# ===== 5. 后台核心守护协程（视频母钟 + 演示模式列车运行仿真） =====
+# ===== 5. 后台核心守护协程（视频母钟中央轮播 + WebSocket 广播） =====
 async def background_master_loop():
-    """全线母钟总调度守护：每秒轮巡所有线路列车仿真状态与视频播放母钟"""
+    """全线母钟总调度守护：每秒轮巡视频母钟进度并向所有在线屏幕广播状态"""
     while True:
         await asyncio.sleep(1)
 
-        # 1. 演示模式：自动仿真所有已注册线路的车流
-        if dispatch_state["signaling_mode"] == "DEMO":
-            for line_id, engine in LINE_ENGINES.items():
-                line_cfg = LINES_REGISTRY.get(line_id, {})
-                active_trains = engine.get_all_trains()
-                if line_id == dispatch_state.get("active_line_id"):
-                    dispatch_state["active_trains"] = active_trains
-
-                for s in line_cfg.get("stations", []):
-                    st_id = s["id"]
-                    if st_id not in dispatch_state["emergency"]:
-                        for pf_id in (1, 2):
-                            auto_state = engine.get_state(st_id, pf_id)
-                            if line_id in LINE_DISPATCH and st_id in LINE_DISPATCH[line_id]:
-                                curr_trip1 = LINE_DISPATCH[line_id][st_id][pf_id]["trip1"]
-                                curr_manual_st = curr_trip1.get("status")
-                                
-                                if curr_manual_st == "NONSTOP":
-                                    # 如果当前被设置为不停靠：
-                                    # 检查这一趟不停靠列车是否已经离开车站（auto_state 自动切到新一趟车的 COUNTDOWN 且时间充足）
-                                    if auto_state["trip1"]["status"] == "COUNTDOWN" and curr_trip1.get("_passed"):
-                                        curr_trip1["status"] = auto_state["trip1"]["status"]
-                                        curr_trip1["countdown"] = auto_state["trip1"]["countdown"]
-                                        curr_trip1["dest"] = auto_state["trip1"]["dest"]
-                                        curr_trip1["_passed"] = False
-                                    else:
-                                        if auto_state["trip1"]["status"] in ("ARRIVED", "ARRIVING"):
-                                            curr_trip1["_passed"] = True
-                                        curr_trip1["dest"] = auto_state["trip1"]["dest"]
-                                        curr_trip1["countdown"] = 0
-                                else:
-                                    curr_trip1["status"] = auto_state["trip1"]["status"]
-                                    curr_trip1["countdown"] = auto_state["trip1"]["countdown"]
-                                    curr_trip1["dest"] = auto_state["trip1"]["dest"]
-
-                                LINE_DISPATCH[line_id][st_id][pf_id]["trip2"]["dest"] = auto_state["trip2"]["dest"]
-                                LINE_DISPATCH[line_id][st_id][pf_id]["trip2"]["countdown"] = auto_state["trip2"]["countdown"]
-
-            # 同步当前活跃线路的 stations 给 OCC
-            active_lid = dispatch_state.get("active_line_id", DEFAULT_LINE_ID)
-            dispatch_state["stations"] = LINE_DISPATCH.get(active_lid, {})
-
-        # 2. 视频母钟自动轮播切片
+        # 1. 视频母钟自动轮播切片
         if video_state["playlist"] and video_state["auto_loop"] and not video_state["is_black"]:
             elapsed = time.time() - video_state["start_time"]
             curr_dur = video_state["duration"]
@@ -522,11 +346,83 @@ async def background_master_loop():
                 video_state["start_time"] = time.time()
                 print(f"🎬 [视频母钟] 自动轮播切片: {next_item['name']} (时长: {next_item['duration']}s)")
 
-        # 3. 每秒向所有在线屏幕广播最新的母钟与进站状态
+        # 2. 每秒向所有在线屏幕广播最新的母钟与进站状态
         if manager.active_connections:
             await manager.broadcast_state()
 
-# ===== 6. OCC 调度管理控制台 API =====
+# ===== 6. ATS 信号遥测接收接口 (接收外部 simulator.py 或真实信号机数据) =====
+@app.post("/api/ats/update")
+async def ats_telemetry_update(req: Request):
+    """
+    接收来自独立 ATS 信号发生器 (simulator.py) 或外部信号系统的行车与站台预测数据
+    """
+    global LAST_ATS_TIMESTAMP
+    LAST_ATS_TIMESTAMP = time.time()
+    data = await req.json()
+    line_id = int(data.get("line_id", 3))
+    trains = data.get("trains", [])
+    stations = data.get("stations", {})
+    
+    LINE_TRAINS[line_id] = trains
+    
+    if line_id not in LINE_DISPATCH:
+        LINE_DISPATCH[line_id] = {}
+        
+    for st_id_str, pfs in stations.items():
+        st_id = int(st_id_str)
+        if st_id not in LINE_DISPATCH[line_id]:
+            LINE_DISPATCH[line_id][st_id] = {1: {"trip1": {}, "trip2": {}}, 2: {"trip1": {}, "trip2": {}}}
+        for pf_id_str, trips in pfs.items():
+            pf_id = int(pf_id_str)
+            if pf_id not in LINE_DISPATCH[line_id][st_id]:
+                LINE_DISPATCH[line_id][st_id][pf_id] = {"trip1": {}, "trip2": {}}
+                
+            curr_st = LINE_DISPATCH[line_id][st_id][pf_id]
+            override_key = (line_id, st_id, pf_id)
+            
+            # 检查是否有 OCC 手动覆盖本趟车次
+            if override_key in MANUAL_OVERRIDES:
+                ov = MANUAL_OVERRIDES[override_key]
+                # 如果是 NONSTOP，当车次过站后自动恢复
+                if ov.get("status") == "NONSTOP":
+                    auto_status = trips.get("trip1", {}).get("status")
+                    if auto_status == "COUNTDOWN" and ov.get("_passed"):
+                        MANUAL_OVERRIDES.pop(override_key, None)
+                        curr_st["trip1"] = trips.get("trip1", {})
+                        curr_st["trip2"] = trips.get("trip2", {})
+                    else:
+                        if auto_status in ("ARRIVED", "ARRIVING"):
+                            ov["_passed"] = True
+                        curr_st["trip1"]["status"] = "NONSTOP"
+                        curr_st["trip1"]["countdown"] = 0
+                        curr_st["trip1"]["dest"] = trips.get("trip1", {}).get("dest", 0)
+                        curr_st["trip2"] = trips.get("trip2", {})
+                elif ov.get("status") in ("OUT_OF_SERVICE", "OUTOFSERVICE"):
+                    # 退出服务：本趟与下一趟全部退服，保留正常终点站信息
+                    curr_st["trip1"]["status"] = "OUT_OF_SERVICE"
+                    curr_st["trip1"]["countdown"] = 0
+                    curr_st["trip1"]["dest"] = trips.get("trip1", {}).get("dest", curr_st["trip1"].get("dest", 0))
+                    curr_st["trip2"]["status"] = "OUT_OF_SERVICE"
+                    curr_st["trip2"]["countdown"] = 0
+                    curr_st["trip2"]["dest"] = trips.get("trip2", {}).get("dest", curr_st["trip2"].get("dest", 0))
+                else:
+                    # 保持手动设置的状态，直接忽略 simulator 的 trip1 数据！
+                    curr_st["trip1"]["status"] = ov.get("status", "COUNTDOWN")
+                    curr_st["trip1"]["countdown"] = ov.get("countdown", 3)
+                    curr_st["trip1"]["dest"] = ov.get("dest") or trips.get("trip1", {}).get("dest", 0)
+                    curr_st["trip2"] = trips.get("trip2", {})
+            else:
+                curr_st["trip1"] = trips.get("trip1", {})
+                curr_st["trip2"] = trips.get("trip2", {})
+    
+    # 同步当前活跃线路给 OCC 控制台
+    if line_id == dispatch_state.get("active_line_id"):
+        dispatch_state["active_trains"] = trains
+        dispatch_state["stations"] = LINE_DISPATCH.get(line_id, {})
+        
+    return {"status": "ok", "received_line": line_id, "trains_count": len(trains)}
+
+# ===== 7. OCC 调度管理控制台 API =====
 @app.post("/api/dispatch")
 async def update_dispatch(req: Request):
     """OCC 调度中心指令下发"""
@@ -548,16 +444,46 @@ async def update_dispatch(req: Request):
                 target_st["trip1"]["countdown"] = int(data["trip1_countdown"])
             if "trip1_dest" in data:
                 target_st["trip1"]["dest"] = int(data["trip1_dest"])
-            if "trip2_countdown" in data and data["trip2_countdown"] != "":
-                target_st["trip2"]["countdown"] = int(data["trip2_countdown"])
-            if "trip2_dest" in data:
-                target_st["trip2"]["dest"] = int(data["trip2_dest"])
+                
+            # 记录人工覆盖，后续 simulator.py 的更新会自动忽略本站台本趟车次！
+            override_key = (active_lid, st_id, pf_id)
+            MANUAL_OVERRIDES[override_key] = {
+                "status": target_st["trip1"].get("status", "COUNTDOWN"),
+                "countdown": target_st["trip1"].get("countdown", 3),
+                "dest": target_st["trip1"].get("dest", 0),
+                "_passed": False
+            }
 
-    elif action == "SET_SIGNALING_MODE":
-        mode = data.get("mode", "DEMO").upper()
-        if mode in ("DEMO", "MANUAL", "CBTC"):
-            dispatch_state["signaling_mode"] = mode
-            print(f"🎛️ [模式切换] 当前调度模式已切换为: {mode}")
+    elif action == "RESTORE_AUTO":
+        st_id = int(data.get("station", 0))
+        pf_id = int(data.get("platform", 1))
+        override_key = (active_lid, st_id, pf_id)
+        MANUAL_OVERRIDES.pop(override_key, None)
+
+    elif action == "LINE_OUT_OF_SERVICE":
+        line_cfg = LINES_REGISTRY.get(active_lid, ACTIVE_LINE)
+        for s in line_cfg.get("stations", []):
+            st_id = s["id"]
+            for pf_id in (1, 2):
+                if active_lid in LINE_DISPATCH and st_id in LINE_DISPATCH[active_lid]:
+                    curr_t1_dest = LINE_DISPATCH[active_lid][st_id][pf_id]["trip1"].get("dest", 0)
+                    curr_t2_dest = LINE_DISPATCH[active_lid][st_id][pf_id]["trip2"].get("dest", 0)
+                    LINE_DISPATCH[active_lid][st_id][pf_id]["trip1"]["status"] = "OUT_OF_SERVICE"
+                    LINE_DISPATCH[active_lid][st_id][pf_id]["trip1"]["countdown"] = 0
+                    LINE_DISPATCH[active_lid][st_id][pf_id]["trip2"]["status"] = "OUT_OF_SERVICE"
+                    LINE_DISPATCH[active_lid][st_id][pf_id]["trip2"]["countdown"] = 0
+                    MANUAL_OVERRIDES[(active_lid, st_id, pf_id)] = {
+                        "status": "OUT_OF_SERVICE", "countdown": 0, "dest": curr_t1_dest, "_passed": False
+                    }
+        print(f"⛔ [OCC调度] 线路 [{line_cfg.get('name_cn', f'Line {active_lid}')}] 已设为全线退出服务！")
+        await manager.broadcast_state()
+
+    elif action == "RESTORE_ALL_AUTO":
+        to_del = [k for k in MANUAL_OVERRIDES.keys() if k[0] == active_lid]
+        for k in to_del:
+            MANUAL_OVERRIDES.pop(k, None)
+        print(f"🟢 [OCC调度] 线路 [{active_lid}] 已解除人工锁定，恢复全线自动行车时刻表！")
+        await manager.broadcast_state()
 
     elif action == "SET_TICKER":
         dispatch_state["global_ticker"] = data.get("text", dispatch_state["global_ticker"])
@@ -640,6 +566,7 @@ async def get_video_status():
             "screen": info.get("screen")
         })
 
+    is_ats_online = (time.time() - LAST_ATS_TIMESTAMP) < 4.0 if LAST_ATS_TIMESTAMP > 0 else False
     return {
         "current_video": video_state["current_video"],
         "name": os.path.basename(video_state["current_video"]) if video_state["current_video"] else None,
@@ -652,15 +579,17 @@ async def get_video_status():
         "current_index": video_state["current_index"],
         "online_count": len(manager.active_connections),
         "online_screens": online_screens,
-        "signaling_mode": dispatch_state["signaling_mode"],
-        "active_trains": dispatch_state.get("active_trains", []),
+        "is_ats_online": is_ats_online,
+        "last_ats_time": LAST_ATS_TIMESTAMP,
+        "signaling_mode": "ATS_ONLINE" if is_ats_online else "MANUAL",
+        "active_trains": LINE_TRAINS.get(dispatch_state.get("active_line_id"), []),
         "stations": dispatch_state["stations"]
     }
 
-# ===== 7. 内置 OCC 调度可视化控制台页面 (/control) =====
+# ===== 8. 内置 OCC 调度可视化控制台页面 (/control) =====
 @app.get("/control", response_class=HTMLResponse)
 async def control_panel(line: Optional[int] = Query(None)):
-    global ACTIVE_LINE, demo_engine, dispatch_state, STATION_MAP
+    global ACTIVE_LINE, dispatch_state, STATION_MAP
     
     # 动态热扫描线路库
     loaded_lines = load_all_lines()
@@ -673,9 +602,8 @@ async def control_panel(line: Optional[int] = Query(None)):
         if selected_line["line_id"] != dispatch_state.get("active_line_id"):
             ACTIVE_LINE = selected_line
             STATION_MAP = {s["id"]: s for s in ACTIVE_LINE.get("stations", [])}
-            demo_engine = DemoSimulationSignaling(ACTIVE_LINE)
             dispatch_state["active_line_id"] = line
-            dispatch_state["stations"] = init_all_stations_dispatch(ACTIVE_LINE)
+            dispatch_state["stations"] = LINE_DISPATCH.get(line, init_all_stations_dispatch(ACTIVE_LINE))
             dispatch_state["global_ticker"] = f"欢迎乘坐{ACTIVE_LINE.get('name_cn', '西安地铁')}！请先下后上，注意站台间隙。"
             print(f"🎛️ [OCC切换线路] 调度中心已切换至: {ACTIVE_LINE.get('name_cn', f'Line {line}')}")
     else:
@@ -743,8 +671,7 @@ async def control_panel(line: Optional[int] = Query(None)):
     </div>
     <div class="mode-bar">
       <span class="badge" id="online-count-badge">在线屏幕: 0</span>
-      <span class="badge badge-success" id="mode-badge">🟢 演示模式 (3分钟仿真运行)</span>
-      <button class="secondary" style="width: auto; margin-top: 0; padding: 4px 10px;" onclick="toggleSignalingMode()">🔄 切换模式</button>
+      <span class="badge badge-success" id="mode-badge">🟢 ATS 信号在线接入</span>
     </div>
   </header>
 
@@ -823,6 +750,7 @@ async def control_panel(line: Optional[int] = Query(None)):
           <option value="ARRIVING">🟡 即将到站 (Will Be Arriving)</option>
           <option value="ARRIVED">🟢 列车到站 (Train Arrived)</option>
           <option value="NONSTOP">🔴 不停靠 (Non-Stop)</option>
+          <option value="OUT_OF_SERVICE">⛔ 退出服务 (Out of service)</option>
         </select>
       </div>
 
@@ -903,6 +831,9 @@ async def control_panel(line: Optional[int] = Query(None)):
       <button class="danger" onclick="triggerEmergency(true)">🚨 触发车站紧急疏散模式</button>
       <button class="success" onclick="triggerEmergency(false)">✅ 解除应急状态，恢复常态</button>
 
+      <button class="danger" style="margin-top: 10px; background: #991b1b;" onclick="setLineOutOfService()">⛔ 设为全线退出服务 (Out of service)</button>
+      <button class="secondary" style="margin-top: 6px;" onclick="restoreAllAuto()">🟢 恢复全线自动行车时刻表</button>
+
       <div class="form-group" style="margin-top: 20px;">
         <label>全线底部跑马灯 (Ticker)</label>
         <input type="text" id="ticker_text" value="欢迎乘坐西安地铁三号线！请先下后上，注意站台间隙。">
@@ -954,15 +885,14 @@ async def control_panel(line: Optional[int] = Query(None)):
 
         // 2. 更新模式 Badge
         const modeBadge = document.getElementById('mode-badge');
-        if (v.signaling_mode === 'DEMO') {{
-          modeBadge.textContent = '🟢 演示模式 (3分钟自动运行仿真)';
-          modeBadge.className = 'badge badge-success';
-        }} else if (v.signaling_mode === 'MANUAL') {{
-          modeBadge.textContent = '🟠 手动调度模式 (人工控制)';
-          modeBadge.className = 'badge badge-warn';
-        }} else {{
-          modeBadge.textContent = '🔵 CBTC信号系统模式';
-          modeBadge.className = 'badge badge-cbtc';
+        if (modeBadge) {{
+          if (v.is_ats_online) {{
+            modeBadge.textContent = '🟢 ATS 信号在线接入';
+            modeBadge.className = 'badge badge-success';
+          }} else {{
+            modeBadge.textContent = '⚪ ATS 信号离线 / 手动待机';
+            modeBadge.className = 'badge badge-warn';
+          }}
         }}
 
         // 3. 更新视频母钟监视
@@ -1166,13 +1096,6 @@ async def control_panel(line: Optional[int] = Query(None)):
       window.location.href = '/control?line=' + lineId;
     }}
 
-    function toggleSignalingMode() {{
-      const nextMode = currentSignalingMode === 'DEMO' ? 'MANUAL' : 'DEMO';
-      apiPost({{ action: 'SET_SIGNALING_MODE', mode: nextMode }}).then(() => {{
-        pollVideoStatus();
-      }});
-    }}
-
     setInterval(pollVideoStatus, 1000);
     pollVideoStatus();
 
@@ -1257,14 +1180,12 @@ async def control_panel(line: Optional[int] = Query(None)):
     function restoreAutoTrip() {{
       const stId = parseInt(document.getElementById('station_select').value);
       const pfId = parseInt(document.getElementById('platform_select').value);
-      document.getElementById('trip1_status').value = 'COUNTDOWN';
       apiPost({{
-        action: 'UPDATE_TRIP',
+        action: 'RESTORE_AUTO',
         station: stId,
-        platform: pfId,
-        trip1_status: 'COUNTDOWN'
+        platform: pfId
       }}).then(() => {{
-        showToast(`🟢 已恢复 [${{stId}}号站] ${{pfId}}号台为自动仿真调度`, 'success');
+        showToast(`🟢 已恢复 [${{stId}}号站] ${{pfId}}号台为自动行车时刻表`, 'success');
       }});
     }}
 
@@ -1283,6 +1204,18 @@ async def control_panel(line: Optional[int] = Query(None)):
         action: 'SET_TICKER',
         text: document.getElementById('ticker_text').value
       }}).then(() => showToast('📢 跑马灯滚动公告已更新！', 'success'));
+    }}
+
+    function setLineOutOfService() {{
+      apiPost({{ action: 'LINE_OUT_OF_SERVICE' }}).then(() => {{
+        showToast('⛔ 全线所有车站已切换为“退出服务”状态！', 'danger');
+      }});
+    }}
+
+    function restoreAllAuto() {{
+      apiPost({{ action: 'RESTORE_ALL_AUTO' }}).then(() => {{
+        showToast('🟢 已恢复全线各站台为自动行车时刻表！', 'success');
+      }});
     }}
   </script>
 </body>

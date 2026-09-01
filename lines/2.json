@@ -3,18 +3,6 @@
   "name_cn": "西安地铁2号线",
   "name_en": "Xi'an Metro Line 2",
   "color": "#e60012",
-  "headway_sec": 180,
-  "station_interval_sec": 35,
-  "turnaround_dur_sec": 35,
-  "stop_time_sec": 20,
-  "routing_pattern": {
-    "down_sequence": [24, 24, 24, 24, 22],
-    "up_sequence": [0, 0, 0, 0, 2],
-    "start_terminal": 0,
-    "full_turn_terminal": 24,
-    "short_turn_terminal": 22,
-    "north_short_terminal": 2
-  },
   "stations": [
     {"id": 0,  "cn": "草滩",       "en": "CAOTAN",       "short": "草滩",   "has_turnaround_loop": true},
     {"id": 1,  "cn": "红会医院北区", "en": "HONGHUIYIYUANBEIQU", "short": "红会北"},

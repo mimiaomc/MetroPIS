@@ -76,23 +76,10 @@
     .countdown-unit { font-size: 3.6vw; font-weight: 900; color: #ffe600; margin-left: 0.4vw; }
     .countdown-en { font-size: 2.7vw; font-weight: 700; color: #ffe600; margin-left: 0.4vw; }
 
-    /* 特殊状态文本样式（即将进站 / 列车到站 / 不停靠） */
+    /* 特殊状态文本样式（即将到站 / 列车到站 / 不停靠 / 退出服务） */
     .status-display { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
     .status-display-cn { font-size: 3.2vw; font-weight: 900; color: #ffe600; line-height: 1.1; letter-spacing: 0.05vw; }
-    .status-display-en { font-size: 1.3vw; font-weight: 700; color: #ffe600; line-height: 1.1; margin-top: 0.3vh; }
-
-    /* 不停靠：醒目警示红橙色与高亮光晕 */
-    #trip1-state-nonstop .status-display-cn {
-      color: #ff3b30;
-      font-size: 3.5vw;
-      letter-spacing: 0.1vw;
-      text-shadow: 0 0 15px rgba(255, 59, 48, 0.7);
-    }
-    #trip1-state-nonstop .status-display-en {
-      color: #ff8a80;
-      font-size: 1.4vw;
-      font-weight: 800;
-    }
+    .status-display-en { font-size: 1.65vw; font-weight: 700; color: #ffe600; line-height: 1.1; margin-top: 0.4vh; }
 
     /* 下一趟倒计时：纯白且稍小 */
     .countdown-next .countdown-num { font-size: 2.7vw; font-weight: 900; color: #ffffff; }
@@ -190,6 +177,11 @@
           <div class="status-display-cn">不停靠</div>
           <div class="status-display-en">Non-Stop</div>
         </div>
+        <!-- 4. 退出服务 -->
+        <div id="trip1-state-outofservice" class="trip-state status-display" style="display: none;">
+          <div class="status-display-cn">退出服务</div>
+          <div class="status-display-en">Out of service</div>
+        </div>
       </div>
       <div class="dest-row">
         <div class="dest-label">
@@ -209,9 +201,15 @@
         <div>Next Trip</div>
       </div>
       <div class="countdown countdown-next" id="trip2-box">
-        <span class="countdown-num" id="trip2-num">-</span>
-        <span class="countdown-unit" id="trip2-unit">分钟</span>
-        <span class="countdown-en" id="trip2-en">min</span>
+        <div id="trip2-state-countdown" class="trip-state" style="display: flex; align-items: baseline;">
+          <span class="countdown-num" id="trip2-num">-</span>
+          <span class="countdown-unit" id="trip2-unit">分钟</span>
+          <span class="countdown-en" id="trip2-en">min</span>
+        </div>
+        <div id="trip2-state-outofservice" class="trip-state status-display" style="display: none;">
+          <div class="status-display-cn" style="font-size: 2.7vw; font-weight: 900; color: #ffffff;">退出服务</div>
+          <div class="status-display-en" style="font-size: 1.4vw; font-weight: 700; color: #ffffff; margin-top: 0.3vh;">Out of service</div>
+        </div>
       </div>
       <div class="dest-row">
         <div class="dest-label">
@@ -347,12 +345,14 @@
         const stArriving = document.getElementById('trip1-state-arriving');
         const stArrived = document.getElementById('trip1-state-arrived');
         const stNonstop = document.getElementById('trip1-state-nonstop');
+        const stOutOfService = document.getElementById('trip1-state-outofservice');
 
         // 先全部隐藏
         stCountdown.style.display = 'none';
         stArriving.style.display = 'none';
         stArrived.style.display = 'none';
         stNonstop.style.display = 'none';
+        if (stOutOfService) stOutOfService.style.display = 'none';
 
         const status = (data.trip1.status || 'COUNTDOWN').toUpperCase();
 
@@ -362,6 +362,8 @@
           stArrived.style.display = 'flex';
         } else if (status === 'NONSTOP' || status === 'PASS') {
           stNonstop.style.display = 'flex';
+        } else if (status.includes('OUT') || status.includes('SERVICE')) {
+          if (stOutOfService) stOutOfService.style.display = 'flex';
         } else {
           // 默认正常倒计时模式
           stCountdown.style.display = 'flex';
@@ -373,7 +375,22 @@
       if (data.trip2) {
         document.getElementById('trip2-dest-cn').textContent = data.trip2.dest_cn;
         document.getElementById('trip2-dest-en').textContent = data.trip2.dest_en;
-        document.getElementById('trip2-num').textContent = data.trip2.countdown;
+
+        const st2Countdown = document.getElementById('trip2-state-countdown');
+        const st2OutOfService = document.getElementById('trip2-state-outofservice');
+
+        if (st2Countdown) st2Countdown.style.display = 'none';
+        if (st2OutOfService) st2OutOfService.style.display = 'none';
+
+        const t1Status = (data.trip1 && data.trip1.status || '').toUpperCase();
+        const t2Status = (data.trip2.status || 'NORMAL').toUpperCase();
+
+        if (t1Status.includes('OUT') || t2Status.includes('OUT') || t1Status.includes('SERVICE') || t2Status.includes('SERVICE')) {
+          if (st2OutOfService) st2OutOfService.style.display = 'flex';
+        } else {
+          if (st2Countdown) st2Countdown.style.display = 'flex';
+          document.getElementById('trip2-num').textContent = data.trip2.countdown;
+        }
       }
 
       // 4. 更新底部跑马灯

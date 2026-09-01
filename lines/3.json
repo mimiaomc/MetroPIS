@@ -3,17 +3,6 @@
   "name_cn": "西安地铁3号线",
   "name_en": "Xi'an Metro Line 3",
   "color": "#e91e63",
-  "headway_sec": 180,
-  "station_interval_sec": 35,
-  "turnaround_dur_sec": 35,
-  "stop_time_sec": 20,
-  "routing_pattern": {
-    "down_sequence": [25, 25, 20],
-    "up_sequence": [0, 0, 0],
-    "start_terminal": 0,
-    "full_turn_terminal": 25,
-    "short_turn_terminal": 20
-  },
   "stations": [
     {"id": 0,  "cn": "鱼化寨",     "en": "YUHUAZHAI",     "short": "鱼化寨", "has_turnaround_loop": true},
     {"id": 1,  "cn": "丈八北路",   "en": "ZHANGBABEILU",   "short": "丈八北"},
