@@ -19,7 +19,7 @@ async def lifespan(app: FastAPI):
     yield
     task.cancel()
 
-app = FastAPI(title="Xi'an Metro PIDS Central OCC Server", lifespan=lifespan)
+app = FastAPI(title="Metro PIDS Central OCC Server", lifespan=lifespan)
 
 # 启用 CORS 跨域
 app.add_middleware(
@@ -49,28 +49,22 @@ def load_all_lines() -> Dict[int, dict]:
             print(f"❌ 加载线路配置文件失败 {jf}: {e}")
             
     if not lines:
-        print("⚠️ 未发现 lines/*.json 配置文件，使用内置默认 3 号线配置")
-        lines[3] = {
-            "line_id": 3,
-            "name_cn": "西安地铁3号线",
-            "name_en": "Xi'an Metro Line 3",
-            "color": "#e91e63",
-            "headway_sec": 180,
-            "station_interval_sec": 35,
-            "turnaround_dur_sec": 35,
-            "stop_time_sec": 20,
-            "routing_pattern": {
-                "sequence": [25, 25, 20],
-                "start_terminal": 0,
-                "full_turn_terminal": 25,
-                "short_turn_terminal": 20
-            },
-            "stations": []
+        print("⚠️ 未发现 lines/*.json 配置文件，使用内置演示线路配置")
+        lines[1] = {
+            "line_id": 1,
+            "name_cn": "示例线路1号线",
+            "name_en": "Demo Line 1",
+            "color": "#0284c7",
+            "stations": [
+                {"id": 0, "cn": "起始站", "en": "START STATION", "short": "始发"},
+                {"id": 1, "cn": "中间站", "en": "CENTRAL STATION", "short": "中间"},
+                {"id": 2, "cn": "终点站", "en": "TERMINAL STATION", "short": "终点"}
+            ]
         }
     return lines
 
 LINES_REGISTRY = load_all_lines()
-DEFAULT_LINE_ID = 3 if 3 in LINES_REGISTRY else list(LINES_REGISTRY.keys())[0]
+DEFAULT_LINE_ID = sorted(LINES_REGISTRY.keys())[0] if LINES_REGISTRY else 1
 ACTIVE_LINE = LINES_REGISTRY[DEFAULT_LINE_ID]
 STATION_MAP = {s["id"]: s for s in ACTIVE_LINE.get("stations", [])}
 
@@ -155,12 +149,12 @@ def init_all_stations_dispatch(line_config: dict):
             1: {
                 "trip1": {"dest": short_term if st_id < short_term else full_term, "countdown": 3, "status": "COUNTDOWN"},
                 "trip2": {"dest": full_term, "countdown": 6, "status": "NORMAL"},
-                "ticker": f"欢迎乘坐{line_config.get('name_cn', '西安地铁')}！",
+                "ticker": f"欢迎乘坐{line_config.get('name_cn', '城市轨道交通')}！",
             },
             2: {
                 "trip1": {"dest": start_term, "countdown": 4, "status": "COUNTDOWN"},
                 "trip2": {"dest": start_term, "countdown": 8, "status": "NORMAL"},
-                "ticker": f"欢迎乘坐{line_config.get('name_cn', '西安地铁')}！",
+                "ticker": f"欢迎乘坐{line_config.get('name_cn', '城市轨道交通')}！",
             }
         }
     return st_dict
@@ -176,7 +170,7 @@ dispatch_state = {
     "active_line_id": DEFAULT_LINE_ID,
     "active_trains": [],
     "stations": LINE_DISPATCH.get(DEFAULT_LINE_ID, {}),
-    "global_ticker": f"欢迎乘坐{ACTIVE_LINE.get('name_cn', '西安地铁')}！请先下后上，注意站台间隙。",
+    "global_ticker": f"欢迎乘坐{ACTIVE_LINE.get('name_cn', '城市轨道交通')}！请先下后上，注意站台间隙。",
     "emergency": {},
     "live_stream": None
 }
@@ -244,7 +238,7 @@ class ConnectionManager:
             "server_time": int(time.time() * 1000),
             "screen": {
                 "line": line_id,
-                "line_name": line_cfg.get("name_cn", "西安地铁"),
+                "line_name": line_cfg.get("name_cn", "城市轨道交通"),
                 "line_color": line_cfg.get("color", "#e91e63"),
                 "station_id": st_id,
                 "station_cn": st_meta["cn"],
@@ -291,7 +285,7 @@ manager = ConnectionManager()
 async def websocket_endpoint(websocket: WebSocket):
     # 解析连接参数
     query_params = dict(websocket.query_params)
-    line = int(query_params.get("line", 3))
+    line = int(query_params.get("line", DEFAULT_LINE_ID))
     station = int(query_params.get("station", 0))
     platform = int(query_params.get("platform", 1))
     screen = int(query_params.get("screen", 1))
@@ -359,7 +353,7 @@ async def ats_telemetry_update(req: Request):
     global LAST_ATS_TIMESTAMP
     LAST_ATS_TIMESTAMP = time.time()
     data = await req.json()
-    line_id = int(data.get("line_id", 3))
+    line_id = int(data.get("line_id", DEFAULT_LINE_ID))
     trains = data.get("trains", [])
     stations = data.get("stations", {})
     
@@ -604,14 +598,14 @@ async def control_panel(line: Optional[int] = Query(None)):
             STATION_MAP = {s["id"]: s for s in ACTIVE_LINE.get("stations", [])}
             dispatch_state["active_line_id"] = line
             dispatch_state["stations"] = LINE_DISPATCH.get(line, init_all_stations_dispatch(ACTIVE_LINE))
-            dispatch_state["global_ticker"] = f"欢迎乘坐{ACTIVE_LINE.get('name_cn', '西安地铁')}！请先下后上，注意站台间隙。"
+            dispatch_state["global_ticker"] = f"欢迎乘坐{ACTIVE_LINE.get('name_cn', '城市轨道交通')}！请先下后上，注意站台间隙。"
             print(f"🎛️ [OCC切换线路] 调度中心已切换至: {ACTIVE_LINE.get('name_cn', f'Line {line}')}")
     else:
         selected_line = LINES_REGISTRY.get(dispatch_state.get("active_line_id"), ACTIVE_LINE)
 
     active_st_list = selected_line.get("stations", [])
     station_options = "".join([f'<option value="{s["id"]}">{s["id"]:02d} - {s["cn"]} ({s["en"]})</option>' for s in active_st_list])
-    line_name = selected_line.get("name_cn", "西安地铁")
+    line_name = selected_line.get("name_cn", "城市轨道交通")
     line_json_str = json.dumps(selected_line, ensure_ascii=False)
     
     line_options = "".join([f'<option value="{lid}" {"selected" if lid == selected_line["line_id"] else ""}>{lcfg.get("name_cn", f"Line {lid}")}</option>' for lid, lcfg in LINES_REGISTRY.items()])
@@ -836,7 +830,7 @@ async def control_panel(line: Optional[int] = Query(None)):
 
       <div class="form-group" style="margin-top: 20px;">
         <label>全线底部跑马灯 (Ticker)</label>
-        <input type="text" id="ticker_text" value="欢迎乘坐西安地铁三号线！请先下后上，注意站台间隙。">
+        <input type="text" id="ticker_text" value="欢迎乘坐城市轨道交通！请先下后上，注意站台间隙。">
       </div>
       <button onclick="setTicker()">📝 更新全线滚动公告</button>
     </div>
@@ -1227,7 +1221,7 @@ app.mount("/", StaticFiles(directory=".", html=True), name="static")
 
 if __name__ == "__main__":
     import uvicorn
-    print("🚇 西安地铁 3 号线 PIDS 中心大后端已启动在 http://0.0.0.0:8080")
+    print("🚇 Metro PIDS 中心大后端已启动在 http://0.0.0.0:8080")
     print("🎛️ OCC 调度中心控制台: http://localhost:8080/control")
     print("📺 PIS 站台屏幕前端: http://localhost:8080/")
     uvicorn.run(app, host="0.0.0.0", port=8080)

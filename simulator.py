@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ================================================================================
-🚇 Xi'an Metro ATS Simulation Engine (独立信号仿真与波浪运行图发生器)
+🚇 Metro ATS Simulation Engine (独立信号仿真与波浪运行图发生器)
 ================================================================================
 职责：
 1. 动态加载 lines/*.json 线路拓扑与交路规则；
@@ -61,7 +61,7 @@ class LineSimulationSignaling:
     """
     def __init__(self, line_config: dict, timetable_config: dict = None):
         self.config = line_config
-        self.line_id = line_config.get("line_id", 3)
+        self.line_id = line_config.get("line_id", 1)
         tt = timetable_config or {}
         
         self.headway = tt.get("headway_sec", 180)
@@ -69,14 +69,13 @@ class LineSimulationSignaling:
         self.turnaround_dur = tt.get("turnaround_dur_sec", 35)
         self.stop_time = tt.get("stop_time_sec", 20)
         
-        self.routing = tt.get("routing_pattern", {})
-        self.down_seq = self.routing.get("down_sequence") or self.routing.get("sequence", [25, 25, 20])
-        self.start_terminal = self.routing.get("start_terminal", 0)
-        self.up_seq = self.routing.get("up_sequence", [self.start_terminal])
-        
-        self.full_terminal = self.routing.get("full_turn_terminal", max(0, len(line_config.get("stations", [])) - 1))
-        self.short_terminal = self.routing.get("short_turn_terminal", self.full_terminal)
         self.stations = line_config.get("stations", [])
+        self.routing = tt.get("routing_pattern", {})
+        self.start_terminal = self.routing.get("start_terminal", 0)
+        self.full_terminal = self.routing.get("full_turn_terminal", max(0, len(self.stations) - 1))
+        self.short_terminal = self.routing.get("short_turn_terminal", self.full_terminal)
+        self.down_seq = self.routing.get("down_sequence") or self.routing.get("sequence", [self.full_terminal])
+        self.up_seq = self.routing.get("up_sequence", [self.start_terminal])
         self.start_epoch = time.time()
 
     def get_all_trains(self) -> list:
