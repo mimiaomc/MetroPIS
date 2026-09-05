@@ -252,15 +252,15 @@ class ConnectionManager:
                 "dest_id": t1_dest,
                 "dest_cn": t1_meta["cn"],
                 "dest_en": t1_meta["en"],
-                "countdown": station_data["trip1"]["countdown"],
+                "countdown": station_data["trip1"].get("countdown", 3),
                 "status": t1_status
             },
             "trip2": {
                 "dest_id": t2_dest,
                 "dest_cn": t2_meta["cn"],
                 "dest_en": t2_meta["en"],
-                "countdown": station_data["trip2"]["countdown"],
-                "status": station_data["trip2"]["status"]
+                "countdown": station_data["trip2"].get("countdown", 6),
+                "status": station_data["trip2"].get("status", "NORMAL")
             },
             "ticker": station_data.get("ticker", dispatch_state["global_ticker"]),
             "emergency": emergency_data,

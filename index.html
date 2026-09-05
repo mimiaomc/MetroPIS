@@ -385,7 +385,7 @@
         const t1Status = (data.trip1 && data.trip1.status || '').toUpperCase();
         const t2Status = (data.trip2.status || 'NORMAL').toUpperCase();
 
-        if (t1Status.includes('OUT') || t2Status.includes('OUT') || t1Status.includes('SERVICE') || t2Status.includes('SERVICE')) {
+        if (t2Status.includes('OUT') || t2Status.includes('SERVICE')) {
           if (st2OutOfService) st2OutOfService.style.display = 'flex';
         } else {
           if (st2Countdown) st2Countdown.style.display = 'flex';
