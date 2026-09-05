@@ -69,8 +69,10 @@ class LineSimulationSignaling:
         self.turnaround_dur = tt.get("turnaround_dur_sec", 35)
         self.stop_time = tt.get("stop_time_sec", 20)
         
+        # 交路规则优先从线路配置文件 (lines/*.json) 读取，
+        # 仿真时刻表 (timetables.json) 仅作备用（向后兼容）
         self.stations = line_config.get("stations", [])
-        self.routing = tt.get("routing_pattern", {})
+        self.routing = line_config.get("routing_pattern") or tt.get("routing_pattern", {})
         self.start_terminal = self.routing.get("start_terminal", 0)
         self.full_terminal = self.routing.get("full_turn_terminal", max(0, len(self.stations) - 1))
         self.short_terminal = self.routing.get("short_turn_terminal", self.full_terminal)
@@ -128,7 +130,7 @@ class LineSimulationSignaling:
                 })
             # 北端终点折返区间
             elif up_dest - (self.turnaround_dur / self.interval) <= pos < up_dest:
-                p = (elapsed - (m * self.headway - (orig - up_dest) * self.interval)) / self.turnaround_dur
+                p = (elapsed - (m * self.headway - up_dest * self.interval)) / self.turnaround_dur
                 if 0 <= p <= 1.0:
                     dir_type = 4 if (up_dest != self.start_terminal) else 3
                     trains.append({

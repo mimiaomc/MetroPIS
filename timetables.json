@@ -3,27 +3,12 @@
     "headway_sec": 180,
     "station_interval_sec": 35,
     "turnaround_dur_sec": 35,
-    "stop_time_sec": 20,
-    "routing_pattern": {
-      "down_sequence": [24, 24, 24, 24, 22],
-      "up_sequence": [0, 0, 0, 0, 2],
-      "start_terminal": 0,
-      "full_turn_terminal": 24,
-      "short_turn_terminal": 22,
-      "north_short_terminal": 2
-    }
+    "stop_time_sec": 20
   },
   "3": {
     "headway_sec": 180,
     "station_interval_sec": 35,
     "turnaround_dur_sec": 35,
-    "stop_time_sec": 20,
-    "routing_pattern": {
-      "down_sequence": [25, 25, 20],
-      "up_sequence": [0, 0, 0],
-      "start_terminal": 0,
-      "full_turn_terminal": 25,
-      "short_turn_terminal": 20
-    }
+    "stop_time_sec": 20
   }
 }
