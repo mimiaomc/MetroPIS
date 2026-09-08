@@ -576,7 +576,7 @@ async def get_video_status():
         "is_ats_online": is_ats_online,
         "last_ats_time": LAST_ATS_TIMESTAMP,
         "signaling_mode": "ATS_ONLINE" if is_ats_online else "MANUAL",
-        "active_trains": LINE_TRAINS.get(dispatch_state.get("active_line_id"), []),
+        "active_trains": LINE_TRAINS.get(int(dispatch_state.get("active_line_id") or 1), []),
         "stations": dispatch_state["stations"]
     }
 
@@ -601,7 +601,7 @@ async def control_panel(line: Optional[int] = Query(None)):
             dispatch_state["global_ticker"] = f"欢迎乘坐{ACTIVE_LINE.get('name_cn', '城市轨道交通')}！请先下后上，注意站台间隙。"
             print(f"🎛️ [OCC切换线路] 调度中心已切换至: {ACTIVE_LINE.get('name_cn', f'Line {line}')}")
     else:
-        selected_line = LINES_REGISTRY.get(dispatch_state.get("active_line_id"), ACTIVE_LINE)
+        selected_line = LINES_REGISTRY.get(int(dispatch_state.get("active_line_id") or 1), ACTIVE_LINE)
 
     active_st_list = selected_line.get("stations", [])
     station_options = "".join([f'<option value="{s["id"]}">{s["id"]:02d} - {s["cn"]} ({s["en"]})</option>' for s in active_st_list])

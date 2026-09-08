@@ -19,7 +19,7 @@ import sys
 import time
 import urllib.request
 import urllib.error
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 # ===== 1. 动态加载线路配置库 =====
 def load_all_lines() -> Dict[int, dict]:
@@ -59,7 +59,7 @@ class LineSimulationSignaling:
     单条线路波浪式连续闭塞运行图仿真
     支持上下行多交路（由 timetables.json 配置驱动）
     """
-    def __init__(self, line_config: dict, timetable_config: dict = None):
+    def __init__(self, line_config: dict, timetable_config: Optional[dict] = None):
         self.config = line_config
         self.line_id = line_config.get("line_id", 1)
         tt = timetable_config or {}
