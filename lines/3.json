@@ -3,6 +3,7 @@
   "name_cn": "西安地铁3号线",
   "name_en": "Xi'an Metro Line 3",
   "color": "#e91e63",
+  "ticker": "欢迎乘坐西安地铁3号线！请先下后上，注意站台间隙。",
   "routing_pattern": {
     "start_terminal": 0,
     "full_turn_terminal": 25,

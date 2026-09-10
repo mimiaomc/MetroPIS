@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="mdui-theme-dark">
+<head>
+  <meta charset="UTF-8">
+  <title id="page-title">PIDS OCC 调度控制中心</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- MDUI v2 CSS & Material Icons -->
+  <link rel="stylesheet" href="https://unpkg.com/mdui@2/mdui.css">
+  <script src="https://unpkg.com/mdui@2/mdui.global.js"></script>
+
+  <style>
+    /* 本地优先加载 Material Icons 字体，确保离线或弱网下图标 100% 正常显示 */
+    @font-face {
+      font-family: 'Material Icons';
+      font-style: normal;
+      font-weight: 400;
+      src: url('/fonts/MaterialIcons-Regular.woff2') format('woff2'),
+           url('/fonts/MaterialIcons-Regular.ttf') format('truetype'),
+           url('https://fonts.gstatic.com/s/materialicons/v145/flUhRq6tzZclQEJ-Vdg-IuiaDsNc.woff2') format('woff2');
+    }
+
+    @font-face {
+      font-family: 'Material Icons Outlined';
+      font-style: normal;
+      font-weight: 400;
+      src: url('/fonts/MaterialIcons-Outlined.woff2') format('woff2'),
+           url('https://fonts.gstatic.com/s/materialiconsoutlined/v110/gok-H7zzDkdnRel8-DQ6KAXJ69wP1tGnf4ZGhUce.woff2') format('woff2');
+    }
+
+    .material-icons {
+      font-family: 'Material Icons';
+      font-weight: normal;
+      font-style: normal;
+      font-size: 24px;
+      line-height: 1;
+      letter-spacing: normal;
+      text-transform: none;
+      display: inline-block;
+      white-space: nowrap;
+      word-wrap: normal;
+      direction: ltr;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .material-icons-outlined {
+      font-family: 'Material Icons Outlined';
+      font-weight: normal;
+      font-style: normal;
+      font-size: 24px;
+      line-height: 1;
+      letter-spacing: normal;
+      text-transform: none;
+      display: inline-block;
+      white-space: nowrap;
+      word-wrap: normal;
+      direction: ltr;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: var(--mdui-color-surface);
+      color: var(--mdui-color-on-surface);
+      font-family: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      min-height: 100vh;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 100%;
+      margin: 0;
+      padding: 14px 16px 40px;
+      box-sizing: border-box;
+    }
+
+    mdui-card {
+      display: block !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+    }
+
+    .section-card {
+      display: block !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+      padding: 18px 20px;
+      margin-bottom: 16px;
+      border-radius: var(--mdui-shape-corner-medium, 12px);
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin: 0 0 14px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--mdui-color-primary);
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .form-row {
+      margin-bottom: 12px;
+    }
+
+    .status-panel {
+      background-color: var(--mdui-color-surface-container, rgba(255, 255, 255, 0.05));
+      border: 1px solid var(--mdui-color-outline-variant);
+      border-radius: var(--mdui-shape-corner-small, 8px);
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .screens-box {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      max-height: 90px;
+      overflow-y: auto;
+      margin-top: 10px;
+    }
+
+    /* 运行图 SVG 容器 */
+    #train-graph-container {
+      position: relative;
+      background-color: var(--mdui-color-surface-container-high, #0f172a);
+      border: 1px solid var(--mdui-color-outline-variant);
+      border-radius: var(--mdui-shape-corner-small, 8px);
+      width: 100%;
+      min-width: 1060px;
+      box-sizing: border-box;
+      height: 175px;
+      padding: 5px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 顶部标准导航栏 (靠左对齐，标准标题栏) -->
+  <mdui-top-app-bar style="border-bottom: 1px solid var(--mdui-color-outline-variant); background-color: var(--mdui-color-surface-container);">
+    <mdui-button-icon icon="subway" style="color: var(--mdui-color-primary);"></mdui-button-icon>
+    <mdui-top-app-bar-title style="font-weight: 600; font-size: 18px; margin-left: 4px;">
+      <span id="header_line_name">城市轨道交通</span> · PIDS OCC 调度控制中心
+    </mdui-top-app-bar-title>
+    <div style="flex-grow: 1;"></div>
+    <div style="display: flex; align-items: center; gap: 12px; padding-right: 12px;">
+      <mdui-select id="line_select_header" variant="outlined" style="min-width: 180px;" end-icon="arrow_drop_down">
+      </mdui-select>
+
+      <mdui-chip id="mode-chip" icon="sensors">ATS 信号在线</mdui-chip>
+
+      <mdui-button-icon id="theme-btn" icon="light_mode" onclick="toggleTheme()"></mdui-button-icon>
+    </div>
+  </mdui-top-app-bar>
+
+  <div class="container">
+
+    <!-- 1. 上下行闭塞分区与折返占线图 (标准板块，顶到两边宽) -->
+    <mdui-card variant="elevated" class="section-card" id="train-graph-card" style="width: 100% !important; display: block !important;">
+      <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <mdui-icon name="alt_route"></mdui-icon>
+          <span>上下行运行图（轨道交通区间闭塞与折返占线图）</span>
+        </div>
+        <div style="font-size: 12px; color: var(--mdui-color-on-surface-variant); font-weight: normal; display: flex; align-items: center; gap: 16px;">
+          <span style="display: inline-flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 10px; height: 10px; background-color: #0284c7; border-radius: 2px;"></span>1号台 (下行)</span>
+          <span style="display: inline-flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 10px; height: 10px; background-color: #059669; border-radius: 2px;"></span>2号台 (上行)</span>
+          <span style="display: inline-flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 10px; height: 10px; background-color: #7e22ce; border-radius: 2px;"></span>折返线/渡线</span>
+        </div>
+      </div>
+      <div style="overflow-x: auto; width: 100%; box-sizing: border-box; border-radius: var(--mdui-shape-corner-small, 8px);">
+        <div id="train-graph-container" style="width: 100% !important; min-width: 1060px; box-sizing: border-box;">
+          <svg id="track-svg" viewBox="0 0 1060 170" width="100%" height="170px" style="display: block; width: 100% !important; min-width: 1060px;">
+            <!-- 下行轨道 -->
+            <line id="line-track-down" x1="70" y1="48" x2="990" y2="48" stroke="#475569" stroke-width="4" stroke-linecap="round" />
+            <text x="35" y="32" fill="#38bdf8" font-size="11" font-weight="bold">1号台 (下行)</text>
+            
+            <!-- 上行轨道 -->
+            <line id="line-track-up" x1="70" y1="122" x2="990" y2="122" stroke="#475569" stroke-width="4" stroke-linecap="round" />
+            <text x="35" y="146" fill="#34d399" font-size="11" font-weight="bold">2号台 (上行)</text>
+            
+            <!-- 西端折返环线 -->
+            <path id="path-start-terminal" d="M 70 122 C 20 122, 20 48, 70 48" fill="none" stroke="#38bdf8" stroke-width="3" stroke-dasharray="4 2" />
+            <text id="label-start-terminal" x="12" y="85" fill="#38bdf8" font-size="9" font-weight="bold" text-anchor="middle" transform="rotate(-90 12 85)">西端折返线</text>
+
+            <!-- 动态渡线容器 -->
+            <g id="svg-crossovers"></g>
+
+            <!-- 东端大交路折返环线 -->
+            <path id="path-end-terminal" d="M 990 48 C 1040 48, 1040 122, 990 122" fill="none" stroke="#38bdf8" stroke-width="3" stroke-dasharray="4 2" />
+            <text id="label-end-terminal" x="1048" y="85" fill="#38bdf8" font-size="9" font-weight="bold" text-anchor="middle" transform="rotate(90 1048 85)">东端折返线</text>
+
+            <!-- 车站节点容器 -->
+            <g id="svg-stations"></g>
+            <!-- 动态运行列车容器 -->
+            <g id="svg-trains"></g>
+          </svg>
+        </div>
+      </div>
+    </mdui-card>
+
+    <!-- 2. 三大控制操作区 -->
+    <div class="grid-3">
+
+      <!-- 卡片 1: 车站列车调度 -->
+      <mdui-card variant="elevated" class="section-card">
+        <div class="card-title">
+          <mdui-icon name="commute"></mdui-icon>
+          <span><span id="panel_line_name">城市轨道交通</span> · 站台调度</span>
+        </div>
+
+        <div class="form-row">
+          <mdui-select label="选择目标车站" id="station_select" variant="outlined" style="width: 100%;" onchange="onStationOrPlatformChange()" end-icon="arrow_drop_down">
+          </mdui-select>
+        </div>
+
+        <div class="form-row">
+          <mdui-select label="选择站台方向" id="platform_select" value="1" variant="outlined" style="width: 100%;" onchange="onStationOrPlatformChange()" end-icon="arrow_drop_down">
+            <mdui-menu-item value="1">1号站台 (下行)</mdui-menu-item>
+            <mdui-menu-item value="2">2号站台 (上行)</mdui-menu-item>
+          </mdui-select>
+        </div>
+
+        <div class="status-panel">
+          <div>当前状态：<strong id="st-status-badge">加载中</strong></div>
+          <div>本趟预告：开往 <strong id="st-dest-text">--</strong> · 倒计时 <strong id="st-cd-text">-</strong> 分钟</div>
+        </div>
+
+        <div class="form-row">
+          <mdui-select label="本趟运行状态" id="trip1_status" variant="outlined" style="width: 100%;" end-icon="arrow_drop_down">
+            <mdui-menu-item value="COUNTDOWN">正常区间倒计时 (COUNTDOWN)</mdui-menu-item>
+            <mdui-menu-item value="ARRIVING">即将到站 (Will Be Arriving)</mdui-menu-item>
+            <mdui-menu-item value="ARRIVED">列车到站 (Train Arrived)</mdui-menu-item>
+            <mdui-menu-item value="NONSTOP">不停靠 (Non-Stop)</mdui-menu-item>
+            <mdui-menu-item value="OUT_OF_SERVICE">退出服务 (Out of service)</mdui-menu-item>
+          </mdui-select>
+        </div>
+
+        <div class="form-row">
+          <mdui-text-field type="number" label="本趟倒计时 (分钟)" id="trip1_countdown" value="3" min="0" max="99" variant="outlined" style="width: 100%;">
+          </mdui-text-field>
+        </div>
+
+        <div class="form-row">
+          <mdui-select label="本趟终点站" id="trip1_dest" variant="outlined" style="width: 100%;" end-icon="arrow_drop_down">
+          </mdui-select>
+        </div>
+
+        <div class="btn-row">
+          <mdui-button variant="filled" icon="send" onclick="updateTrip()">设为本趟状态</mdui-button>
+          <mdui-button variant="tonal" icon="auto_mode" onclick="restoreAutoTrip()">恢复自动仿真</mdui-button>
+        </div>
+      </mdui-card>
+
+      <!-- 卡片 2: 视频母钟中央播控 -->
+      <mdui-card variant="elevated" class="section-card">
+        <div class="card-title">
+          <mdui-icon name="live_tv"></mdui-icon>
+          <span>全线视频母钟中央播控</span>
+        </div>
+
+        <div class="status-panel">
+          <div><strong>当前播出：</strong><span id="v-name" style="color: var(--mdui-color-primary); font-weight: bold;">加载中...</span></div>
+          <div style="margin: 4px 0;"><strong>母钟进度：</strong><span id="v-time">00:00 / 00:00</span>（剩余 <span id="v-remain">0</span> 秒）</div>
+          
+          <div style="margin: 8px 0 10px 0;">
+            <mdui-linear-progress id="v-progress" value="0" max="100"></mdui-linear-progress>
+          </div>
+
+          <div style="display: flex; gap: 8px;">
+            <mdui-chip id="v-loop-badge">自动轮播中</mdui-chip>
+            <mdui-chip id="v-black-badge">正常播放</mdui-chip>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label style="font-size: 12px; color: var(--mdui-color-on-surface-variant); display: block; margin-bottom: 6px;">快速切播指定视频</label>
+          <div id="video-btn-list" style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;"></div>
+        </div>
+
+        <div class="form-row" style="margin-top: 14px;">
+          <label style="font-size: 12px; color: var(--mdui-color-on-surface-variant); display: block; margin-bottom: 6px;">精准进度拖拽与跳转</label>
+          <mdui-slider id="seek-slider" min="0" max="100" value="0" style="width: 100%; margin-bottom: 8px;"></mdui-slider>
+          
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <mdui-text-field type="number" id="seek-input" min="0" max="999" label="指定秒数" variant="outlined" style="flex: 1;"></mdui-text-field>
+            <mdui-button variant="tonal" icon="forward" onclick="seekVideo(document.getElementById('seek-input').value)">跳转</mdui-button>
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <mdui-button variant="outlined" icon="replay_10" onclick="stepVideo(-10)">快退 10 秒</mdui-button>
+          <mdui-button variant="outlined" end-icon="forward_10" onclick="stepVideo(10)">快进 10 秒</mdui-button>
+        </div>
+
+        <div class="btn-row">
+          <mdui-button variant="tonal" icon="skip_next" onclick="nextVideo()">切下一部</mdui-button>
+          <mdui-button variant="filled" icon="stop" id="btn-black" onclick="toggleBlackScreen()">全线黑屏待机</mdui-button>
+        </div>
+
+        <div class="btn-row">
+          <mdui-button variant="tonal" icon="repeat" id="btn-loop" onclick="toggleAutoLoop()">切换自动轮播</mdui-button>
+          <mdui-button variant="text" icon="sync" onclick="rescanVideos()">重新扫描媒体库</mdui-button>
+        </div>
+      </mdui-card>
+
+      <!-- 卡片 3: 突发应急与全线广播 -->
+      <mdui-card variant="elevated" class="section-card">
+        <div class="card-title" style="color: var(--mdui-color-error, #f87171);">
+          <mdui-icon name="notification_important"></mdui-icon>
+          <span>突发应急与运营公告</span>
+        </div>
+
+        <div class="form-row">
+          <mdui-select label="应急目标车站" id="emergency_station" variant="outlined" style="width: 100%;" end-icon="arrow_drop_down">
+          </mdui-select>
+        </div>
+
+        <div class="form-row">
+          <mdui-text-field rows="2" label="应急广播词" id="emergency_msg" variant="outlined" value="车站发生紧急情况，请听从工作人员指挥有序疏散！" style="width: 100%;">
+          </mdui-text-field>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <mdui-button variant="filled" style="background-color: var(--mdui-color-error); color: var(--mdui-color-on-error);" icon="warning" onclick="triggerEmergency(true)">触发车站紧急疏散模式</mdui-button>
+          <mdui-button variant="tonal" icon="check_circle" onclick="triggerEmergency(false)">解除应急状态，恢复常态</mdui-button>
+          <mdui-button variant="outlined" style="color: var(--mdui-color-error); border-color: var(--mdui-color-error);" icon="block" onclick="setLineOutOfService()">设为全线退出服务</mdui-button>
+          <mdui-button variant="tonal" icon="restore" onclick="restoreAllAuto()">恢复全线自动行车时刻表</mdui-button>
+        </div>
+
+        <div style="margin-top: 18px; border-top: 1px solid var(--mdui-color-outline-variant); padding-top: 14px;">
+          <div class="form-row">
+            <mdui-text-field label="全线底部跑马灯 (Ticker)" id="ticker_text" variant="outlined" style="width: 100%;" value="欢迎乘坐城市轨道交通！请先下后上，注意站台间隙。">
+            </mdui-text-field>
+          </div>
+          <mdui-button variant="filled" icon="campaign" style="width: 100%;" onclick="setTicker()">更新全线滚动公告</mdui-button>
+        </div>
+      </mdui-card>
+
+    </div>
+
+    <!-- 3. 当前在线屏幕终端监视 (置于底部) -->
+    <mdui-card variant="elevated" class="section-card" style="margin-top: 16px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <mdui-icon name="devices" style="color: var(--mdui-color-primary);"></mdui-icon>
+          <span style="font-weight: 600; font-size: 14px;">当前在线屏幕终端监视</span>
+          <mdui-chip id="online-count-chip" icon="tv" variant="assist">在线屏幕: 0</mdui-chip>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span id="screens-summary" style="font-size: 13px; color: var(--mdui-color-on-surface-variant);">暂无屏幕接入</span>
+          <mdui-button variant="tonal" icon="refresh" onclick="pollVideoStatus()">刷新状态</mdui-button>
+        </div>
+      </div>
+      <div class="screens-box" id="screens-tag-list"></div>
+    </mdui-card>
+
+  </div>
+
+  <script>
+    // 基础 API 调用辅助函数
+    async function apiPost(data) {
+      const res = await fetch('/api/dispatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      return await res.json();
+    }
+
+    // Material Design Snackbar 提示
+    function showToast(msg) {
+      if (window.mdui && mdui.snackbar) {
+        mdui.snackbar({ message: msg, placement: 'top-end' });
+      } else {
+        console.log(msg);
+      }
+    }
+
+    // 主题切换（深色/浅色模式）
+    function toggleTheme() {
+      const htmlEl = document.documentElement;
+      const isDark = htmlEl.classList.contains('mdui-theme-dark');
+      if (isDark) {
+        htmlEl.classList.remove('mdui-theme-dark');
+        htmlEl.classList.add('mdui-theme-light');
+        document.getElementById('theme-btn').icon = 'dark_mode';
+        if (window.mdui) mdui.setTheme('light');
+      } else {
+        htmlEl.classList.remove('mdui-theme-light');
+        htmlEl.classList.add('mdui-theme-dark');
+        document.getElementById('theme-btn').icon = 'light_mode';
+        if (window.mdui) mdui.setTheme('dark');
+      }
+    }
+
+    let isBlackState = false;
+    let isAutoLoopState = true;
+    let currentSignalingMode = "DEMO";
+    let cachedStationsData = {};
+    let currentActiveLineId = null;
+    let isApplyingData = false;
+    let lastScreensJson = '';
+    let lastRenderedWidth = 0;
+    let cachedActiveTrains = [];
+
+    let LINE_CONFIG = {};
+    let STATIONS_DATA = [];
+    let NUM_STATIONS = 0;
+    let ROUTING = {};
+    let SHORT_TERM = 20;
+    let FULL_TERM = 0;
+    let START_TERM = 0;
+
+    function populateSelect(selectEl, options, selectedVal) {
+      if (!selectEl) return;
+      selectEl.innerHTML = '';
+      options.forEach(opt => {
+        const item = document.createElement('mdui-menu-item');
+        item.value = String(opt.value);
+        item.textContent = opt.text;
+        selectEl.appendChild(item);
+      });
+      if (selectedVal !== undefined && selectedVal !== null) {
+        selectEl.value = String(selectedVal);
+      }
+    }
+
+    // 定时轮询视频母钟与在线状态
+    async function pollVideoStatus() {
+      try {
+        const res = await fetch('/api/video_status');
+        const v = await res.json();
+        
+        isBlackState = v.is_black;
+        isAutoLoopState = v.auto_loop;
+        currentSignalingMode = v.signaling_mode;
+        cachedStationsData = v.stations || {};
+
+        // 1. 更新在线屏幕数与标签
+        document.getElementById('online-count-chip').textContent = `在线屏幕: ${v.online_count}`;
+        const screensTagList = document.getElementById('screens-tag-list');
+        const screensJson = JSON.stringify(v.online_screens || []);
+        if (screensJson !== lastScreensJson) {
+          lastScreensJson = screensJson;
+          screensTagList.innerHTML = '';
+          if (v.online_screens && v.online_screens.length > 0) {
+            document.getElementById('screens-summary').textContent = `共 ${v.online_screens.length} 台设备接入`;
+            v.online_screens.forEach(s => {
+              const chip = document.createElement('mdui-chip');
+              chip.variant = 'filter';
+              chip.icon = 'tv';
+              chip.textContent = `${s.station_cn} ${s.platform}台 (${s.device_id})`;
+              screensTagList.appendChild(chip);
+            });
+          } else {
+            document.getElementById('screens-summary').textContent = '暂无屏幕接入';
+          }
+        }
+
+        // 2. 更新 ATS 状态
+        const modeChip = document.getElementById('mode-chip');
+        if (modeChip) {
+          if (v.is_ats_online) {
+            modeChip.textContent = 'ATS 信号在线接入';
+            modeChip.icon = 'wifi';
+          } else {
+            modeChip.textContent = 'ATS 信号离线 / 手动待机';
+            modeChip.icon = 'wifi_off';
+          }
+        }
+
+        // 3. 更新母钟进度
+        document.getElementById('v-name').textContent = v.is_black ? '已黑屏待机' : (v.name || '无视频');
+        const elMin = Math.floor(v.elapsed / 60);
+        const elSec = Math.floor(v.elapsed % 60);
+        const durMin = Math.floor(v.duration / 60);
+        const durSec = Math.floor(v.duration % 60);
+        const fmt = (m, s) => `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        
+        document.getElementById('v-time').textContent = `${fmt(elMin, elSec)} / ${fmt(durMin, durSec)}`;
+        document.getElementById('v-remain').textContent = Math.round(v.remaining);
+
+        const pct = v.duration > 0 ? Math.min(100, (v.elapsed / v.duration) * 100) : 0;
+        document.getElementById('v-progress').value = pct;
+
+        const seekSlider = document.getElementById('seek-slider');
+        if (seekSlider && !seekSlider.matches(':active')) {
+          seekSlider.max = v.duration;
+          seekSlider.value = v.elapsed;
+        }
+
+        const loopBadge = document.getElementById('v-loop-badge');
+        loopBadge.textContent = v.auto_loop ? '自动轮播中' : '轮播已暂停';
+
+        const blackBadge = document.getElementById('v-black-badge');
+        blackBadge.textContent = v.is_black ? '黑屏待机中' : '正常播放';
+
+        document.getElementById('btn-black').textContent = v.is_black ? '恢复正常播放' : '全线黑屏待机';
+        document.getElementById('btn-loop').textContent = v.auto_loop ? '暂停自动轮播' : '开启自动轮播';
+
+        // 4. 渲染视频列表按钮
+        const listDiv = document.getElementById('video-btn-list');
+        if (listDiv.childElementCount !== v.playlist.length) {
+          listDiv.innerHTML = '';
+          v.playlist.forEach((p, idx) => {
+            const btn = document.createElement('mdui-button');
+            btn.variant = 'tonal';
+            btn.icon = 'play_arrow';
+            btn.style.fontSize = '12px';
+            btn.textContent = `${p.name} (${Math.round(p.duration)}s)`;
+            btn.onclick = () => switchVideo(idx);
+            listDiv.appendChild(btn);
+          });
+        }
+
+        // 5. 渲染运行图
+        if (v.active_trains) {
+          cachedActiveTrains = v.active_trains;
+          renderTrainGraph(v.active_trains);
+        }
+
+        // 6. 更新所选车站表单
+        updateStationFormValues();
+
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function renderTrainGraph(trains) {
+        const container = document.getElementById('train-graph-container');
+        const containerWidth = Math.max(1060, Math.floor(container ? container.clientWidth - 10 : 1060));
+        
+        const x_start = 70;
+        const x_end = containerWidth - 70;
+        const intervals = Math.max(1, FULL_TERM > 0 ? FULL_TERM : NUM_STATIONS - 1);
+        const stepX = (x_end - x_start) / intervals;
+
+        const svg = document.getElementById('track-svg');
+        if (svg) {
+            if (svg.getAttribute('viewBox') !== `0 0 ${containerWidth} 170`) {
+                svg.setAttribute('viewBox', `0 0 ${containerWidth} 170`);
+            }
+            svg.setAttribute('width', '100%');
+            svg.style.width = '100%';
+            svg.style.minWidth = containerWidth + 'px';
+        }
+
+        if (lastRenderedWidth !== containerWidth || !document.getElementById('svg-station-node-0')) {
+            lastRenderedWidth = containerWidth;
+
+            // 更新上下行主轨道长度（延伸到右侧边缘）
+            const lineDown = document.getElementById('line-track-down');
+            if (lineDown) lineDown.setAttribute('x2', x_end);
+            const lineUp = document.getElementById('line-track-up');
+            if (lineUp) lineUp.setAttribute('x2', x_end);
+
+            // 更新东端与西端折返环线
+            const pEnd = document.getElementById('path-end-terminal');
+            if (pEnd) pEnd.setAttribute('d', `M ${x_end} 48 C ${x_end + 50} 48, ${x_end + 50} 122, ${x_end} 122`);
+            const lEnd = document.getElementById('label-end-terminal');
+            if (lEnd) {
+              lEnd.setAttribute('x', x_end + 58);
+              lEnd.setAttribute('transform', `rotate(90 ${x_end + 58} 85)`);
+              lEnd.textContent = (STATIONS_DATA[FULL_TERM]?.short || '终点') + '折返线';
+            }
+
+            const lStart = document.getElementById('label-start-terminal');
+            if (lStart) lStart.textContent = (STATIONS_DATA[START_TERM]?.short || '始发') + '折返线';
+
+            // 更新渡线位置
+            let crossHtml = '';
+            STATIONS_DATA.forEach(st => {
+                if (st.has_crossover) {
+                    const cx = x_start + st.id * stepX;
+                    crossHtml += `<path d="M ${cx} 48 C ${cx + 22} 48, ${cx + 29} 85, ${cx + 12} 108 L ${cx} 122" fill="none" stroke="#c084fc" stroke-width="3" stroke-dasharray="3 3" />`;
+                    crossHtml += `<text x="${cx + 26}" y="88" fill="#c084fc" font-size="8.5" font-weight="bold">${st.short || st.cn}渡线</text>`;
+                }
+            });
+            const crossContainer = document.getElementById('svg-crossovers');
+            if (crossContainer) crossContainer.innerHTML = crossHtml;
+
+            // 全宽均匀重绘车站节点
+            const stGroup = document.getElementById('svg-stations');
+            if (stGroup && NUM_STATIONS > 0) {
+                let html = '';
+                for (let i = 0; i < NUM_STATIONS; i++) {
+                    const x = x_start + i * stepX;
+                    html += `<line id="svg-station-node-${i}" x1="${x}" y1="48" x2="${x}" y2="122" stroke="#1e293b" stroke-width="2" />`;
+                    html += `<circle cx="${x}" cy="48" r="4" fill="#64748b" />`;
+                    html += `<circle cx="${x}" cy="122" r="4" fill="#64748b" />`;
+                    const idStr = i < 10 ? '0' + i : i;
+                    const name = STATIONS_DATA[i]?.short || STATIONS_DATA[i]?.cn || `S${i}`;
+                    html += `<text x="${x}" y="76" fill="#94a3b8" font-size="9" font-weight="bold" text-anchor="middle">${idStr}</text>`;
+                    html += `<text x="${x}" y="96" fill="#cbd5e1" font-size="8.5" text-anchor="middle">${name}</text>`;
+                }
+                stGroup.innerHTML = html;
+            }
+        }
+
+        const trGroup = document.getElementById('svg-trains');
+        let trHtml = '';
+        trains.forEach(t => {
+            let tx = 0, ty = 0;
+            let label = '', fill = '#0284c7', stroke = '#38bdf8';
+            let w = 30, h = 20;
+            const termDest = STATIONS_DATA[t.dest]?.short?.substring(0, 1) || '终';
+            const startDest = STATIONS_DATA[START_TERM]?.short?.substring(0, 1) || '始';
+
+            if (t.dir === 1) {
+                tx = x_start + t.pos * stepX;
+                ty = 48;
+                label = `${termDest}`;
+                fill = '#0284c7'; stroke = '#38bdf8';
+            } else if (t.dir === 2) {
+                tx = x_start + t.pos * stepX;
+                ty = 122;
+                label = `${termDest}`;
+                fill = '#059669'; stroke = '#34d399';
+            } else if (t.dir === 3) {
+                const p = t.progress || 0;
+                tx = x_start - Math.sin(p * Math.PI) * 45;
+                ty = 122 - p * 74;
+                label = '折返';
+                fill = '#7e22ce'; stroke = '#c084fc';
+                w = 34;
+            } else if (t.dir === 4) {
+                const p = t.progress || 0;
+                const dest_x = x_start + t.pos * stepX;
+                tx = dest_x + Math.sin(p * Math.PI) * 22;
+                ty = 48 + p * 74;
+                label = '折返';
+                fill = '#7e22ce'; stroke = '#c084fc';
+                w = 34;
+            } else if (t.dir === 5) {
+                const p = t.progress || 0;
+                tx = x_end + Math.sin(p * Math.PI) * 45;
+                ty = 48 + p * 74;
+                label = '折返';
+                fill = '#7e22ce'; stroke = '#c084fc';
+                w = 34;
+            }
+
+            trHtml += `<g transform="translate(${tx}, ${ty})">
+                <rect x="${-w/2}" y="${-h/2}" width="${w}" height="${h}" rx="4" fill="${fill}" stroke="${stroke}" stroke-width="1.5" />
+                <text x="0" y="3.5" fill="#ffffff" font-size="9" font-weight="bold" text-anchor="middle">${label}</text>
+            </g>`;
+        });
+        trGroup.innerHTML = trHtml;
+    }
+
+    function updateStationFormValues() {
+      const stSelect = document.getElementById('station_select');
+      if (!stSelect || !stSelect.value) return;
+      const stId = parseInt(stSelect.value);
+      const pfSelect = document.getElementById('platform_select');
+      const pfId = parseInt(pfSelect && pfSelect.value ? pfSelect.value : 1);
+      const stData = cachedStationsData[stId] && cachedStationsData[stId][pfId];
+      if (!stData) return;
+
+      const t1 = stData.trip1;
+      const t2 = stData.trip2;
+
+      document.getElementById('st-status-badge').textContent = t1.status;
+      document.getElementById('st-cd-text').textContent = t1.countdown;
+      const destName = STATIONS_DATA[t1.dest]?.cn || ('站号 ' + t1.dest);
+      const destEl = document.getElementById('st-dest-text');
+      if (destEl) destEl.textContent = destName;
+
+      const activeEl = document.activeElement;
+      if (activeEl.id !== 'trip1_countdown') document.getElementById('trip1_countdown').value = t1.countdown;
+      if (activeEl.id !== 'trip1_status') document.getElementById('trip1_status').value = t1.status;
+      if (activeEl.id !== 'trip1_dest') document.getElementById('trip1_dest').value = String(t1.dest);
+    }
+
+    function onStationOrPlatformChange() {
+      updateStationFormValues();
+    }
+
+    async function switchLine(lineId) {
+      lineId = parseInt(lineId);
+      if (isNaN(lineId) || lineId === currentActiveLineId) return;
+
+      try {
+        const res = await fetch(`/api/control_init?line=${lineId}`);
+        const data = await res.json();
+        applyLineConfig(data);
+
+        // 更新浏览器地址栏（无刷新替换）
+        const newUrl = new URL(window.location);
+        newUrl.searchParams.set('line', lineId);
+        window.history.replaceState({}, '', newUrl);
+
+        showToast(`已切换至线路：${LINE_CONFIG.name_cn || ('Line ' + lineId)}`);
+        pollVideoStatus();
+      } catch (err) {
+        console.error('切换线路失败:', err);
+      }
+    }
+
+    function seekVideo(sec) {
+      sec = parseFloat(sec) || 0;
+      apiPost({ action: 'SEEK_VIDEO', time: sec });
+    }
+
+    function stepVideo(delta) {
+      fetch('/api/video_status').then(r => r.json()).then(v => {
+        seekVideo(Math.max(0, Math.min(v.duration, v.elapsed + delta)));
+      });
+    }
+
+    function switchVideo(idx) {
+      apiPost({ action: 'SWITCH_VIDEO', index: idx });
+    }
+
+    function nextVideo() {
+      apiPost({ action: 'NEXT_VIDEO' });
+    }
+
+    function toggleBlackScreen() {
+      apiPost({ action: 'BLACK_SCREEN', active: !isBlackState });
+    }
+
+    function rescanVideos() {
+      apiPost({ action: 'RESCAN_VIDEOS' }).then(() => {
+        document.getElementById('video-btn-list').innerHTML = '';
+        pollVideoStatus();
+        showToast('视频库已重新扫描完成！');
+      });
+    }
+
+    function updateTrip() {
+      const stId = parseInt(document.getElementById('station_select').value);
+      const pfId = parseInt(document.getElementById('platform_select').value);
+      const status = document.getElementById('trip1_status').value;
+      const cd = document.getElementById('trip1_countdown').value;
+      const dest = document.getElementById('trip1_dest').value;
+      apiPost({
+        action: 'UPDATE_TRIP',
+        station: stId,
+        platform: pfId,
+        trip1_countdown: cd,
+        trip1_status: status,
+        trip1_dest: dest
+      }).then(() => {
+        showToast(`[${stId}号站] ${pfId}号台 已更新本趟状态`);
+      });
+    }
+
+    function restoreAutoTrip() {
+      const stId = parseInt(document.getElementById('station_select').value);
+      const pfId = parseInt(document.getElementById('platform_select').value);
+      apiPost({
+        action: 'RESTORE_AUTO',
+        station: stId,
+        platform: pfId
+      }).then(() => {
+        showToast(`已恢复 [${stId}号站] ${pfId}号台为自动行车时刻表`);
+      });
+    }
+
+    function triggerEmergency(active) {
+      const stId = parseInt(document.getElementById('emergency_station').value);
+      apiPost({
+        action: 'TRIGGER_EMERGENCY',
+        station: stId,
+        active: active,
+        message: document.getElementById('emergency_msg').value
+      }).then(() => showToast(active ? `车站 [${stId}] 紧急广播模式已下发！` : '应急状态已解除！'));
+    }
+
+    function setTicker() {
+      apiPost({
+        action: 'SET_TICKER',
+        text: document.getElementById('ticker_text').value
+      }).then(() => showToast('跑马灯滚动公告已更新！'));
+    }
+
+    function setLineOutOfService() {
+      apiPost({ action: 'LINE_OUT_OF_SERVICE' }).then(() => {
+        showToast('全线所有车站已切换为“退出服务”状态！');
+      });
+    }
+
+    function restoreAllAuto() {
+      apiPost({ action: 'RESTORE_ALL_AUTO' }).then(() => {
+        showToast('已恢复全线各站台为自动行车时刻表！');
+      });
+    }
+
+    function applyLineConfig(data) {
+      isApplyingData = true;
+      LINE_CONFIG = data.line_config;
+      currentActiveLineId = data.active_line_id;
+      STATIONS_DATA = LINE_CONFIG.stations || [];
+      NUM_STATIONS = STATIONS_DATA.length;
+      ROUTING = LINE_CONFIG.routing_pattern || {};
+      SHORT_TERM = ROUTING.short_turn_terminal !== undefined ? ROUTING.short_turn_terminal : 20;
+      FULL_TERM = ROUTING.full_turn_terminal !== undefined ? ROUTING.full_turn_terminal : Math.max(0, NUM_STATIONS - 1);
+      START_TERM = ROUTING.start_terminal !== undefined ? ROUTING.start_terminal : 0;
+      
+      const lineName = LINE_CONFIG.name_cn || '城市轨道交通';
+      document.title = `${lineName} · PIDS OCC 调度控制中心`;
+      document.getElementById('header_line_name').textContent = lineName;
+      document.getElementById('panel_line_name').textContent = lineName;
+
+      // 填充线路下拉
+      const lineSelect = document.getElementById('line_select_header');
+      const lineOptions = data.lines.map(l => ({ value: l.line_id, text: l.name_cn }));
+      populateSelect(lineSelect, lineOptions, data.active_line_id);
+
+      // 清除运行图节点以便重新渲染新线路的车站和渡线
+      const stGroup = document.getElementById('svg-stations');
+      if (stGroup) stGroup.innerHTML = '';
+      const crossContainer = document.getElementById('svg-crossovers');
+      if (crossContainer) crossContainer.innerHTML = '';
+      lastRenderedWidth = 0;
+
+      // 填充车站下拉
+      const stOptions = STATIONS_DATA.map(s => ({
+        value: s.id,
+        text: `${String(s.id).padStart(2, '0')} - ${s.cn} (${s.en || ''})`
+      }));
+      populateSelect(document.getElementById('station_select'), stOptions, STATIONS_DATA[0]?.id || 0);
+      populateSelect(document.getElementById('trip1_dest'), stOptions, FULL_TERM);
+      populateSelect(document.getElementById('emergency_station'), stOptions, STATIONS_DATA[0]?.id || 0);
+
+      // 确保站台方向默认预设为 1号站台 (下行)
+      const pfSelect = document.getElementById('platform_select');
+      if (pfSelect && !pfSelect.value) {
+        pfSelect.value = '1';
+      }
+
+      // 默认跑马灯
+      if (LINE_CONFIG.ticker) {
+        const tickerInput = document.getElementById('ticker_text');
+        if (tickerInput) tickerInput.value = LINE_CONFIG.ticker;
+      }
+
+      // 延时解除正在更新标志，避免菜单项渲染触发 change 循环
+      setTimeout(() => {
+        isApplyingData = false;
+      }, 100);
+    }
+
+    // 初始化控制台
+    async function initControl() {
+      const params = new URLSearchParams(location.search);
+      const lineParam = params.get('line');
+      const url = '/api/control_init' + (lineParam ? `?line=${lineParam}` : '');
+      
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        
+        applyLineConfig(data);
+
+        // 绑定顶部线路切换选择器
+        const lineSelect = document.getElementById('line_select_header');
+        if (lineSelect) {
+          lineSelect.addEventListener('change', () => {
+            if (isApplyingData) return;
+            const targetLine = parseInt(lineSelect.value);
+            if (!isNaN(targetLine) && targetLine !== currentActiveLineId) {
+              switchLine(targetLine);
+            }
+          });
+        }
+
+        // 监听滑块拖动
+        const slider = document.getElementById('seek-slider');
+        if (slider) {
+          slider.addEventListener('change', (e) => seekVideo(e.target.value));
+        }
+
+        // 启动轮询
+        pollVideoStatus();
+        setInterval(pollVideoStatus, 1000);
+      } catch (err) {
+        console.error('初始化控制台失败:', err);
+      }
+    }
+
+    initControl();
+
+    // 监听运行图容器宽度变化，实时拉伸铺满屏幕宽度
+    const graphContainer = document.getElementById('train-graph-container');
+    if (graphContainer && window.ResizeObserver) {
+      const ro = new ResizeObserver(() => {
+        lastRenderedWidth = 0;
+        if (cachedActiveTrains && cachedActiveTrains.length > 0) {
+          renderTrainGraph(cachedActiveTrains);
+        }
+      });
+      ro.observe(graphContainer);
+    }
+
+    window.addEventListener('resize', () => {
+      lastRenderedWidth = 0;
+      if (cachedActiveTrains && cachedActiveTrains.length > 0) {
+        renderTrainGraph(cachedActiveTrains);
+      }
+    });
+  </script>
+</body>
+</html>

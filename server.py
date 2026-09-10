@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Dict, List, Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Query
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -55,6 +55,7 @@ def load_all_lines() -> Dict[int, dict]:
             "name_cn": "示例线路1号线",
             "name_en": "Demo Line 1",
             "color": "#0284c7",
+            "ticker": "欢迎乘坐示例线路1号线！请先下后上，注意站台间隙。",
             "stations": [
                 {"id": 0, "cn": "起始站", "en": "START STATION", "short": "始发"},
                 {"id": 1, "cn": "中间站", "en": "CENTRAL STATION", "short": "中间"},
@@ -149,12 +150,12 @@ def init_all_stations_dispatch(line_config: dict):
             1: {
                 "trip1": {"dest": short_term if st_id < short_term else full_term, "countdown": 3, "status": "COUNTDOWN"},
                 "trip2": {"dest": full_term, "countdown": 6, "status": "NORMAL"},
-                "ticker": f"欢迎乘坐{line_config.get('name_cn', '城市轨道交通')}！",
+                "ticker": line_config.get("ticker", f"欢迎乘坐{line_config.get('name_cn', '城市轨道交通')}！请先下后上，注意站台间隙。"),
             },
             2: {
                 "trip1": {"dest": start_term, "countdown": 4, "status": "COUNTDOWN"},
                 "trip2": {"dest": start_term, "countdown": 8, "status": "NORMAL"},
-                "ticker": f"欢迎乘坐{line_config.get('name_cn', '城市轨道交通')}！",
+                "ticker": line_config.get("ticker", f"欢迎乘坐{line_config.get('name_cn', '城市轨道交通')}！请先下后上，注意站台间隙。"),
             }
         }
     return st_dict
@@ -170,7 +171,7 @@ dispatch_state = {
     "active_line_id": DEFAULT_LINE_ID,
     "active_trains": [],
     "stations": LINE_DISPATCH.get(DEFAULT_LINE_ID, {}),
-    "global_ticker": f"欢迎乘坐{ACTIVE_LINE.get('name_cn', '城市轨道交通')}！请先下后上，注意站台间隙。",
+    "global_ticker": ACTIVE_LINE.get("ticker", f"欢迎乘坐{ACTIVE_LINE.get('name_cn', '城市轨道交通')}！请先下后上，注意站台间隙。"),
     "emergency": {},
     "live_stream": None
 }
@@ -183,12 +184,12 @@ class ConnectionManager:
     async def connect(self, websocket: WebSocket, screen_info: dict):
         await websocket.accept()
         self.active_connections[websocket] = screen_info
-        print(f"✅ 屏幕已连接: [{screen_info.get('device_id')}] - 当前在线屏幕数: {len(self.active_connections)}")
+        print(f"屏幕已连接: [{screen_info.get('device_id')}] - 当前在线屏幕数: {len(self.active_connections)}")
 
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
             info = self.active_connections.pop(websocket)
-            print(f"❌ 屏幕断开连接: [{info.get('device_id')}] - 剩余在线屏幕数: {len(self.active_connections)}")
+            print(f"屏幕断开连接: [{info.get('device_id')}] - 剩余在线屏幕数: {len(self.active_connections)}")
 
     async def broadcast_state(self):
         """向所有连接的屏幕推送最新状态"""
@@ -580,9 +581,9 @@ async def get_video_status():
         "stations": dispatch_state["stations"]
     }
 
-# ===== 8. 内置 OCC 调度可视化控制台页面 (/control) =====
-@app.get("/control", response_class=HTMLResponse)
-async def control_panel(line: Optional[int] = Query(None)):
+# ===== 8. 内置 OCC 调度可视化控制台页面 (/control) 与初始化接口 =====
+@app.get("/api/control_init")
+async def control_init(line: Optional[int] = Query(None)):
     global ACTIVE_LINE, dispatch_state, STATION_MAP
     
     # 动态热扫描线路库
@@ -598,623 +599,24 @@ async def control_panel(line: Optional[int] = Query(None)):
             STATION_MAP = {s["id"]: s for s in ACTIVE_LINE.get("stations", [])}
             dispatch_state["active_line_id"] = line
             dispatch_state["stations"] = LINE_DISPATCH.get(line, init_all_stations_dispatch(ACTIVE_LINE))
-            dispatch_state["global_ticker"] = f"欢迎乘坐{ACTIVE_LINE.get('name_cn', '城市轨道交通')}！请先下后上，注意站台间隙。"
+            dispatch_state["global_ticker"] = ACTIVE_LINE.get("ticker", f"欢迎乘坐{ACTIVE_LINE.get('name_cn', '城市轨道交通')}！请先下后上，注意站台间隙。")
             print(f"🎛️ [OCC切换线路] 调度中心已切换至: {ACTIVE_LINE.get('name_cn', f'Line {line}')}")
     else:
         selected_line = LINES_REGISTRY.get(int(dispatch_state.get("active_line_id") or 1), ACTIVE_LINE)
 
-    active_st_list = selected_line.get("stations", [])
-    station_options = "".join([f'<option value="{s["id"]}">{s["id"]:02d} - {s["cn"]} ({s["en"]})</option>' for s in active_st_list])
-    line_name = selected_line.get("name_cn", "城市轨道交通")
-    line_json_str = json.dumps(selected_line, ensure_ascii=False)
-    
-    line_options = "".join([f'<option value="{lid}" {"selected" if lid == selected_line["line_id"] else ""}>{lcfg.get("name_cn", f"Line {lid}")}</option>' for lid, lcfg in LINES_REGISTRY.items()])
-    
-    return f"""
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <title>{line_name} · PIDS OCC 调度控制中心</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }}
-    header {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 12px; flex-wrap: wrap; gap: 10px; }}
-    h1 {{ color: #38bdf8; display: flex; align-items: center; gap: 10px; font-size: 22px; margin: 0; }}
-    .mode-bar {{ display: flex; align-items: center; gap: 8px; }}
-    .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-top: 20px; }}
-    .panel {{ background: #1e293b; border-radius: 12px; padding: 20px; border: 1px solid #334155; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3); }}
-    .panel h2 {{ font-size: 17px; margin-top: 0; color: #f1f5f9; border-bottom: 1px solid #475569; padding-bottom: 8px; }}
-    .form-group {{ margin-bottom: 14px; }}
-    label {{ display: block; font-size: 13px; color: #94a3b8; margin-bottom: 6px; font-weight: 500; }}
-    input, select, textarea {{ width: 100%; box-sizing: border-box; background: #0f172a; border: 1px solid #475569; border-radius: 6px; color: #fff; padding: 8px 12px; font-size: 14px; }}
-    button {{ background: #0284c7; color: #fff; border: none; padding: 9px 14px; border-radius: 6px; font-weight: 600; cursor: pointer; transition: 0.2s; width: 100%; font-size: 13px; margin-top: 6px; }}
-    button:hover {{ background: #0369a1; }}
-    button.danger {{ background: #e11d48; }}
-    button.danger:hover {{ background: #be123c; }}
-    button.success {{ background: #059669; }}
-    button.success:hover {{ background: #047857; }}
-    button.secondary {{ background: #475569; }}
-    button.secondary:hover {{ background: #334155; }}
-    .badge {{ display: inline-block; background: #0369a1; color: #fff; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }}
-    .badge-warn {{ background: #d97706; }}
-    .badge-danger {{ background: #e11d48; }}
-    .badge-success {{ background: #059669; }}
-    .badge-cbtc {{ background: #6366f1; }}
-    .status-box {{ background: #0f172a; padding: 12px; border-radius: 8px; font-size: 13px; line-height: 1.6; color: #cbd5e1; border-left: 4px solid #38bdf8; margin-bottom: 12px; }}
-    .progress-bar-bg {{ background: #334155; height: 8px; border-radius: 4px; overflow: hidden; margin: 8px 0; }}
-    .progress-bar-fill {{ background: #38bdf8; height: 100%; width: 0%; transition: width 0.5s linear; }}
-    .btn-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }}
-    .screens-tag-box {{ display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; max-height: 80px; overflow-y: auto; }}
-    .screen-tag {{ background: #334155; color: #38bdf8; padding: 2px 6px; border-radius: 4px; font-size: 11px; }}
-  </style>
-</head>
-<body>
-  <!-- 浮动提示容器（无弹窗干扰） -->
-  <div id="toast-container" style="position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; pointer-events: none;"></div>
-
-  <header>
-    <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
-      <h1>🚇 {line_name} · PIDS OCC 调度控制中心</h1>
-      <div style="display: flex; align-items: center; gap: 6px;">
-        <label style="margin-bottom: 0; color: #94a3b8; font-size: 13px;">选择线路：</label>
-        <select id="line_select_header" onchange="onLineChange(this.value)" style="width: auto; background: #0f172a; border: 1px solid #0284c7; color: #38bdf8; font-weight: bold; border-radius: 6px; padding: 4px 10px; cursor: pointer;">
-          {line_options}
-        </select>
-      </div>
-    </div>
-    <div class="mode-bar">
-      <span class="badge" id="online-count-badge">在线屏幕: 0</span>
-      <span class="badge badge-success" id="mode-badge">🟢 ATS 信号在线接入</span>
-    </div>
-  </header>
-
-  <!-- 当前在线屏幕监视条 -->
-  <div class="panel" style="margin-top: 15px; padding: 12px 20px;">
-    <div style="font-size: 13px; color: #94a3b8; display: flex; justify-content: space-between; align-items: center;">
-      <span><strong>📡 在线屏幕终端清单：</strong><span id="screens-summary">暂无屏幕接入</span></span>
-      <button class="secondary" style="width: auto; margin-top: 0; padding: 3px 8px; font-size: 11px;" onclick="pollVideoStatus()">🔄 刷新状态</button>
-    </div>
-    <div class="screens-tag-box" id="screens-tag-list"></div>
-  </div>
-
-  <div class="panel" style="margin-top: 15px; padding: 12px 20px;">
-    <h2>🚆 上下行运行图 (轨道交通区间闭塞与折返占线图)</h2>
-    <div style="overflow-x: auto; width: 100%;">
-      <div id="train-graph-container" style="position: relative; background: #0b1329; border-radius: 8px; border: 1px solid #334155; min-width: 1060px; height: 180px; padding: 5px;">
-        <svg id="track-svg" viewBox="0 0 1060 170" width="100%" height="170px" style="display: block;">
-          <!-- 轨道底图 -->
-          <!-- 下行轨道 -->
-          <line x1="70" y1="48" x2="990" y2="48" stroke="#334155" stroke-width="4" stroke-linecap="round" />
-          <text x="35" y="32" fill="#38bdf8" font-size="11" font-weight="bold">1号台 (下行)</text>
-          
-          <!-- 上行轨道 -->
-          <line x1="70" y1="122" x2="990" y2="122" stroke="#334155" stroke-width="4" stroke-linecap="round" />
-          <text x="35" y="146" fill="#34d399" font-size="11" font-weight="bold">2号台 (上行)</text>
-          
-          <!-- 西端折返环线 -->
-          <path id="path-start-terminal" d="M 70 122 C 20 122, 20 48, 70 48" fill="none" stroke="#38bdf8" stroke-width="3" stroke-dasharray="4 2" />
-          <text id="label-start-terminal" x="12" y="85" fill="#38bdf8" font-size="9" font-weight="bold" text-anchor="middle" transform="rotate(-90 12 85)">西端折返线</text>
-
-          <!-- 动态渡线容器 -->
-          <g id="svg-crossovers"></g>
-
-          <!-- 东端大交路折返环线 -->
-          <path id="path-end-terminal" d="M 990 48 C 1040 48, 1040 122, 990 122" fill="none" stroke="#38bdf8" stroke-width="3" stroke-dasharray="4 2" />
-          <text id="label-end-terminal" x="1048" y="85" fill="#38bdf8" font-size="9" font-weight="bold" text-anchor="middle" transform="rotate(90 1048 85)">东端折返线</text>
-
-          <!-- 车站节点容器 -->
-          <g id="svg-stations"></g>
-          <!-- 动态运行列车容器 -->
-          <g id="svg-trains"></g>
-        </svg>
-      </div>
-    </div>
-  </div>
-
-  <div class="grid">
-    <!-- 1. 车站精准列车调度 -->
-    <div class="panel" style="border-color: #38bdf8;">
-      <h2>🚉 {line_name} · 站台列车运行调度</h2>
-      
-      <div class="form-group">
-        <label>选择目标车站</label>
-        <select id="station_select" onchange="onStationOrPlatformChange()">
-          {station_options}
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label>选择站台方向</label>
-        <select id="platform_select" onchange="onStationOrPlatformChange()">
-          <option value="1" selected>1号站台 (下行)</option>
-          <option value="2">2号站台 (上行)</option>
-        </select>
-      </div>
-
-      <div class="status-box" id="current-st-info" style="font-size: 12px;">
-        <div>当前状态：<span id="st-status-badge" class="badge">加载中</span></div>
-        <div>本趟预告：开往 <strong id="st-dest-text">--</strong> · 倒计时 <strong id="st-cd-text">-</strong> 分钟</div>
-      </div>
-
-      <div class="form-group">
-        <label>本趟运行状态 (演示模式下由波浪引擎自动推进)</label>
-        <select id="trip1_status">
-          <option value="COUNTDOWN">正常区间倒计时 (COUNTDOWN)</option>
-          <option value="ARRIVING">🟡 即将到站 (Will Be Arriving)</option>
-          <option value="ARRIVED">🟢 列车到站 (Train Arrived)</option>
-          <option value="NONSTOP">🔴 不停靠 (Non-Stop)</option>
-          <option value="OUT_OF_SERVICE">⛔ 退出服务 (Out of service)</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label>本趟倒计时 (分钟)</label>
-        <input type="number" id="trip1_countdown" value="3" min="0" max="99">
-      </div>
-
-      <div class="form-group">
-        <label>本趟终点站</label>
-        <select id="trip1_dest">
-          {station_options}
-        </select>
-      </div>
-
-      <div class="btn-grid">
-        <button onclick="updateTrip()">🚀 设为本趟状态</button>
-        <button class="success" onclick="restoreAutoTrip()">🟢 恢复自动仿真</button>
-      </div>
-    </div>
-
-    <!-- 2. 全线视频母钟播控 -->
-    <div class="panel">
-      <h2>🎬 全线视频母钟中央播控</h2>
-      
-      <div class="status-box" id="video-monitor-box">
-        <div><strong>当前播出：</strong><span id="v-name" style="color: #38bdf8; font-weight: bold;">加载中...</span></div>
-        <div><strong>母钟进度：</strong><span id="v-time">00:00 / 00:00</span>（剩余 <span id="v-remain">0</span>s）</div>
-        <div class="progress-bar-bg"><div class="progress-bar-fill" id="v-progress"></div></div>
-        <div style="margin-top: 6px;">
-          <span class="badge" id="v-loop-badge">自动轮播中</span>
-          <span class="badge" id="v-black-badge">正常播放</span>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label>快速切播指定视频 (动态识别 Video*.mp4)</label>
-        <div id="video-btn-list" class="btn-grid"></div>
-      </div>
-
-      <div class="form-group" style="margin-top: 10px;">
-        <label>🎯 精准进度跳转与拖拽 (秒)</label>
-        <div style="display: flex; gap: 8px; align-items: center;">
-          <input type="range" id="seek-range" min="0" max="100" step="1" style="flex: 1; cursor: pointer;" onchange="seekVideo(this.value)">
-          <input type="number" id="seek-input" min="0" max="999" placeholder="秒" style="width: 65px;">
-          <button style="width: auto; margin-top: 0; padding: 7px 12px;" onclick="seekVideo(document.getElementById('seek-input').value)">跳转</button>
-        </div>
-      </div>
-
-      <div class="btn-grid" style="margin-top: 6px;">
-        <button class="secondary" onclick="stepVideo(-10)">⏪ 快退 10 秒</button>
-        <button class="secondary" onclick="stepVideo(10)">⏩ 快进 10 秒</button>
-      </div>
-
-      <div class="btn-grid" style="margin-top: 6px;">
-        <button class="secondary" onclick="nextVideo()">⏭️ 立即切下一部</button>
-        <button class="danger" id="btn-black" onclick="toggleBlackScreen()">⏹️ 全线黑屏待机</button>
-      </div>
-      <div class="btn-grid" style="margin-top: 6px;">
-        <button class="secondary" id="btn-loop" onclick="toggleAutoLoop()">🔄 切换自动轮播</button>
-        <button class="secondary" onclick="rescanVideos()">📁 重新扫描 Videos/</button>
-      </div>
-    </div>
-
-    <!-- 3. 突发应急与全线广播 -->
-    <div class="panel" style="border-color: #f43f5e;">
-      <h2 style="color: #f43f5e;">⚠️ 突发应急与运营跑马灯</h2>
-      <div class="form-group">
-        <label>应急目标车站</label>
-        <select id="emergency_station">
-          {station_options}
-        </select>
-      </div>
-      <div class="form-group">
-        <label>应急广播词</label>
-        <textarea id="emergency_msg" rows="2">车站发生紧急情况，请听从工作人员指挥有序疏散！</textarea>
-      </div>
-      <button class="danger" onclick="triggerEmergency(true)">🚨 触发车站紧急疏散模式</button>
-      <button class="success" onclick="triggerEmergency(false)">✅ 解除应急状态，恢复常态</button>
-
-      <button class="danger" style="margin-top: 10px; background: #991b1b;" onclick="setLineOutOfService()">⛔ 设为全线退出服务 (Out of service)</button>
-      <button class="secondary" style="margin-top: 6px;" onclick="restoreAllAuto()">🟢 恢复全线自动行车时刻表</button>
-
-      <div class="form-group" style="margin-top: 20px;">
-        <label>全线底部跑马灯 (Ticker)</label>
-        <input type="text" id="ticker_text" value="欢迎乘坐城市轨道交通！请先下后上，注意站台间隙。">
-      </div>
-      <button onclick="setTicker()">📝 更新全线滚动公告</button>
-    </div>
-  </div>
-
-  <script>
-    async function apiPost(data) {{
-      const res = await fetch('/api/dispatch', {{
-        method: 'POST',
-        headers: {{ 'Content-Type': 'application/json' }},
-        body: JSON.stringify(data)
-      }});
-      return await res.json();
-    }}
-
-    let isBlackState = false;
-    let isAutoLoopState = true;
-    let currentSignalingMode = "DEMO";
-    let cachedStationsData = {{}};
-
-    async function pollVideoStatus() {{
-      try {{
-        const res = await fetch('/api/video_status');
-        const v = await res.json();
-        
-        isBlackState = v.is_black;
-        isAutoLoopState = v.auto_loop;
-        currentSignalingMode = v.signaling_mode;
-        cachedStationsData = v.stations || {{}};
-
-        // 1. 更新在线屏幕数与清单
-        document.getElementById('online-count-badge').textContent = `在线屏幕: ${{v.online_count}}`;
-        const screensTagList = document.getElementById('screens-tag-list');
-        screensTagList.innerHTML = '';
-        if (v.online_screens && v.online_screens.length > 0) {{
-          document.getElementById('screens-summary').textContent = `共 ${{v.online_screens.length}} 台设备已接入`;
-          v.online_screens.forEach(s => {{
-            const tag = document.createElement('span');
-            tag.className = 'screen-tag';
-            tag.textContent = `🟢 ${{s.station_cn}} ${{s.platform}}台 (${{s.device_id}})`;
-            screensTagList.appendChild(tag);
-          }});
-        }} else {{
-          document.getElementById('screens-summary').textContent = '暂无屏幕接入';
-        }}
-
-        // 2. 更新模式 Badge
-        const modeBadge = document.getElementById('mode-badge');
-        if (modeBadge) {{
-          if (v.is_ats_online) {{
-            modeBadge.textContent = '🟢 ATS 信号在线接入';
-            modeBadge.className = 'badge badge-success';
-          }} else {{
-            modeBadge.textContent = '⚪ ATS 信号离线 / 手动待机';
-            modeBadge.className = 'badge badge-warn';
-          }}
-        }}
-
-        // 3. 更新视频母钟监视
-        document.getElementById('v-name').textContent = v.is_black ? '⚫ 已黑屏待机' : (v.name || '无视频');
-        const elMin = Math.floor(v.elapsed / 60);
-        const elSec = Math.floor(v.elapsed % 60);
-        const durMin = Math.floor(v.duration / 60);
-        const durSec = Math.floor(v.duration % 60);
-        const fmt = (m, s) => `${{m.toString().padStart(2, '0')}}:${{s.toString().padStart(2, '0')}}`;
-        
-        document.getElementById('v-time').textContent = `${{fmt(elMin, elSec)}} / ${{fmt(durMin, durSec)}}`;
-        document.getElementById('v-remain').textContent = Math.round(v.remaining);
-
-        const pct = v.duration > 0 ? Math.min(100, (v.elapsed / v.duration) * 100) : 0;
-        document.getElementById('v-progress').style.width = pct + '%';
-
-        const seekRange = document.getElementById('seek-range');
-        if (seekRange && !seekRange.matches(':active')) {{
-          seekRange.max = v.duration;
-          seekRange.value = v.elapsed;
-        }}
-
-        const loopBadge = document.getElementById('v-loop-badge');
-        loopBadge.textContent = v.auto_loop ? '自动轮播中' : '轮播已暂停';
-        loopBadge.className = 'badge ' + (v.auto_loop ? 'badge-success' : 'badge-warn');
-
-        const blackBadge = document.getElementById('v-black-badge');
-        blackBadge.textContent = v.is_black ? '黑屏待机中' : '正常播放';
-        blackBadge.className = 'badge ' + (v.is_black ? 'badge-danger' : 'badge-success');
-
-        document.getElementById('btn-black').textContent = v.is_black ? '▶️ 恢复正常播放' : '⏹️ 全线黑屏待机';
-        document.getElementById('btn-loop').textContent = v.auto_loop ? '⏸️ 暂停自动轮播' : '▶️ 开启自动轮播';
-
-        // 4. 渲染视频列表按钮
-        const listDiv = document.getElementById('video-btn-list');
-        if (listDiv.childElementCount !== v.playlist.length) {{
-          listDiv.innerHTML = '';
-          v.playlist.forEach((p, idx) => {{
-            const btn = document.createElement('button');
-            btn.style.fontSize = '12px';
-            btn.style.padding = '6px';
-            btn.textContent = `▶️ ${{p.name}} (${{Math.round(p.duration)}}s)`;
-            btn.onclick = () => switchVideo(idx);
-            listDiv.appendChild(btn);
-          }});
-        }}
-
-        // 5. 渲染运行图
-        // 5. 渲染运行图
-        if (v.active_trains) {{
-          renderTrainGraph(v.active_trains);
-        }}
-
-        // 6. 更新所选车站的表单显示（演示模式下实时刷新）
-        updateStationFormValues();
-
-      }} catch (e) {{
-        console.error(e);
-      }}
-    }}
-
-    const LINE_CONFIG = {line_json_str};
-    const STATIONS_DATA = LINE_CONFIG.stations || [];
-    const NUM_STATIONS = STATIONS_DATA.length;
-    const ROUTING = LINE_CONFIG.routing_pattern || {{}};
-    const SHORT_TERM = ROUTING.short_turn_terminal !== undefined ? ROUTING.short_turn_terminal : 20;
-    const FULL_TERM = ROUTING.full_turn_terminal !== undefined ? ROUTING.full_turn_terminal : (NUM_STATIONS - 1);
-    const START_TERM = ROUTING.start_terminal !== undefined ? ROUTING.start_terminal : 0;
-
-    function renderTrainGraph(trains) {{
-        // 1. 初始化车站与轨道 SVG (只运行一次)
-        if (!document.getElementById('svg-station-node-0')) {{
-            const stGroup = document.getElementById('svg-stations');
-            let html = '';
-            
-            // 动态设置渡线与终点折返位置
-            const x_full = 70 + FULL_TERM * 36.8;
-            
-            // 动态渲染所有渡线 (has_crossover)
-            let crossHtml = '';
-            STATIONS_DATA.forEach(st => {{
-                if (st.has_crossover) {{
-                    const cx = 70 + st.id * 36.8;
-                    crossHtml += `<path d="M ${{cx}} 48 C ${{cx + 22}} 48, ${{cx + 29}} 85, ${{cx + 12}} 108 L ${{cx}} 122" fill="none" stroke="#c084fc" stroke-width="3" stroke-dasharray="3 3" />`;
-                    crossHtml += `<text x="${{cx + 26}}" y="88" fill="#c084fc" font-size="8.5" font-weight="bold">${{st.short || st.cn}}渡线</text>`;
-                }}
-            }});
-            const crossContainer = document.getElementById('svg-crossovers');
-            if (crossContainer) crossContainer.innerHTML = crossHtml;
-            
-            const pEnd = document.getElementById('path-end-terminal');
-            if (pEnd) pEnd.setAttribute('d', `M ${{x_full}} 48 C ${{x_full + 50}} 48, ${{x_full + 50}} 122, ${{x_full}} 122`);
-            const lEnd = document.getElementById('label-end-terminal');
-            if (lEnd) {{
-              lEnd.setAttribute('x', x_full + 58);
-              lEnd.textContent = (STATIONS_DATA[FULL_TERM]?.short || '终点') + '折返线';
-            }}
-
-            const lStart = document.getElementById('label-start-terminal');
-            if (lStart) lStart.textContent = (STATIONS_DATA[START_TERM]?.short || '始发') + '折返线';
-
-            for (let i = 0; i < NUM_STATIONS; i++) {{
-                const x = 70 + i * 36.8;
-                html += `<line id="svg-station-node-${{i}}" x1="${{x}}" y1="48" x2="${{x}}" y2="122" stroke="#1e293b" stroke-width="2" />`;
-                html += `<circle cx="${{x}}" cy="48" r="4" fill="#64748b" />`;
-                html += `<circle cx="${{x}}" cy="122" r="4" fill="#64748b" />`;
-                const idStr = i < 10 ? '0' + i : i;
-                const name = STATIONS_DATA[i]?.short || STATIONS_DATA[i]?.cn || `S${{i}}`;
-                html += `<text x="${{x}}" y="76" fill="#94a3b8" font-size="9" font-weight="bold" text-anchor="middle">${{idStr}}</text>`;
-                html += `<text x="${{x}}" y="96" fill="#cbd5e1" font-size="8.5" text-anchor="middle">${{name}}</text>`;
-            }}
-            stGroup.innerHTML = html;
-        }}
-
-        // 2. 动态渲染所有实时列车（包含上下行与各折返段）
-        const trGroup = document.getElementById('svg-trains');
-        let trHtml = '';
-        trains.forEach(t => {{
-            let tx = 0, ty = 0;
-            let label = '', fill = '#0284c7', stroke = '#38bdf8';
-            let w = 30, h = 20;
-            const termDest = STATIONS_DATA[t.dest]?.short?.substring(0, 1) || '终';
-            const startDest = STATIONS_DATA[START_TERM]?.short?.substring(0, 1) || '始';
-
-            if (t.dir === 1) {{
-                // 下行运行
-                tx = 70 + t.pos * 36.8;
-                ty = 48;
-                label = `▶ ${{termDest}}`;
-                fill = '#0284c7'; stroke = '#38bdf8';
-            }} else if (t.dir === 2) {{
-                // 上行运行
-                tx = 70 + t.pos * 36.8;
-                ty = 122;
-                label = `◀ ${{termDest}}`;
-                fill = '#059669'; stroke = '#34d399';
-            }} else if (t.dir === 3) {{
-                // 始发站折返线 (上行 -> 下行)
-                const p = t.progress || 0;
-                tx = 70 - Math.sin(p * Math.PI) * 45;
-                ty = 122 - p * 74;
-                label = '🔄折返';
-                fill = '#7e22ce'; stroke = '#c084fc';
-                w = 34;
-            }} else if (t.dir === 4) {{
-                // 渡线折返 (下行/上行 -> 反向)
-                const p = t.progress || 0;
-                const dest_x = 70 + t.pos * 36.8;
-                tx = dest_x + Math.sin(p * Math.PI) * 22;
-                ty = 48 + p * 74;
-                label = '🔄折返';
-                fill = '#7e22ce'; stroke = '#c084fc';
-                w = 34;
-            }} else if (t.dir === 5) {{
-                // 大交路终点折返线 (下行 -> 上行)
-                const p = t.progress || 0;
-                const x_full = 70 + FULL_TERM * 36.8;
-                tx = x_full + Math.sin(p * Math.PI) * 45;
-                ty = 48 + p * 74;
-                label = '🔄折返';
-                fill = '#7e22ce'; stroke = '#c084fc';
-                w = 34;
-            }}
-
-            trHtml += `<g transform="translate(${{tx}}, ${{ty}})">
-                <rect x="${{-w/2}}" y="${{-h/2}}" width="${{w}}" height="${{h}}" rx="4" fill="${{fill}}" stroke="${{stroke}}" stroke-width="1.5" />
-                <text x="0" y="3.5" fill="#ffffff" font-size="9" font-weight="bold" text-anchor="middle">${{label}}</text>
-            </g>`;
-        }});
-        trGroup.innerHTML = trHtml;
-    }}
-
-    function updateStationFormValues() {{
-      const stId = parseInt(document.getElementById('station_select').value);
-      const pfId = parseInt(document.getElementById('platform_select').value);
-      const stData = cachedStationsData[stId] && cachedStationsData[stId][pfId];
-      if (!stData) return;
-
-      const t1 = stData.trip1;
-      const t2 = stData.trip2;
-
-      document.getElementById('st-status-badge').textContent = t1.status;
-      document.getElementById('st-cd-text').textContent = t1.countdown;
-      const destName = STATIONS_DATA[t1.dest]?.cn || ('站号 ' + t1.dest);
-      const destEl = document.getElementById('st-dest-text');
-      if (destEl) destEl.textContent = destName;
-
-      // 如果不是在主动编辑输入框，自动对齐
-      const activeEl = document.activeElement;
-      if (activeEl.id !== 'trip1_countdown') document.getElementById('trip1_countdown').value = t1.countdown;
-      if (activeEl.id !== 'trip1_status') document.getElementById('trip1_status').value = t1.status;
-      if (activeEl.id !== 'trip1_dest') document.getElementById('trip1_dest').value = t1.dest;
-      if (activeEl.id !== 'trip2_countdown') document.getElementById('trip2_countdown').value = t2.countdown;
-    }}
-
-    function onStationOrPlatformChange() {{
-      updateStationFormValues();
-    }}
-
-    function onLineChange(lineId) {{
-      window.location.href = '/control?line=' + lineId;
-    }}
-
-    setInterval(pollVideoStatus, 1000);
-    pollVideoStatus();
-
-    function seekVideo(sec) {{
-      sec = parseFloat(sec) || 0;
-      apiPost({{ action: 'SEEK_VIDEO', time: sec }});
-    }}
-
-    function stepVideo(delta) {{
-      fetch('/api/video_status').then(r => r.json()).then(v => {{
-        seekVideo(Math.max(0, Math.min(v.duration, v.elapsed + delta)));
-      }});
-    }}
-
-    function switchVideo(idx) {{
-      apiPost({{ action: 'SWITCH_VIDEO', index: idx }});
-    }}
-
-    function nextVideo() {{
-      apiPost({{ action: 'NEXT_VIDEO' }});
-    }}
-
-    function toggleBlackScreen() {{
-      apiPost({{ action: 'BLACK_SCREEN', active: !isBlackState }});
-    }}
-
-    function showToast(msg, type='success') {{
-      const container = document.getElementById('toast-container');
-      if (!container) return;
-      const toast = document.createElement('div');
-      toast.style.background = type === 'danger' ? '#e11d48' : (type === 'warn' ? '#d97706' : '#059669');
-      toast.style.color = '#ffffff';
-      toast.style.padding = '10px 18px';
-      toast.style.borderRadius = '8px';
-      toast.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
-      toast.style.fontSize = '13px';
-      toast.style.fontWeight = '600';
-      toast.style.transition = 'all 0.3s ease';
-      toast.style.opacity = '0';
-      toast.style.transform = 'translateY(-10px)';
-      toast.textContent = msg;
-      container.appendChild(toast);
-      
-      requestAnimationFrame(() => {{
-        toast.style.opacity = '1';
-        toast.style.transform = 'translateY(0)';
-      }});
-
-      setTimeout(() => {{
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateY(-10px)';
-        setTimeout(() => toast.remove(), 300);
-      }}, 2000);
-    }}
-
-    function rescanVideos() {{
-      apiPost({{ action: 'RESCAN_VIDEOS' }}).then(() => {{
-        document.getElementById('video-btn-list').innerHTML = '';
-        pollVideoStatus();
-        showToast('🎬 视频库已重新扫描完成！', 'success');
-      }});
-    }}
-
-    function updateTrip() {{
-      const stId = parseInt(document.getElementById('station_select').value);
-      const pfId = parseInt(document.getElementById('platform_select').value);
-      const status = document.getElementById('trip1_status').value;
-      const cd = document.getElementById('trip1_countdown').value;
-      const dest = document.getElementById('trip1_dest').value;
-      apiPost({{
-        action: 'UPDATE_TRIP',
-        station: stId,
-        platform: pfId,
-        trip1_countdown: cd,
-        trip1_status: status,
-        trip1_dest: dest
-      }}).then(() => {{
-        showToast(`✅ [${{stId}}号站] ${{pfId}}号台 已设为本趟状态`);
-      }});
-    }}
-
-    function restoreAutoTrip() {{
-      const stId = parseInt(document.getElementById('station_select').value);
-      const pfId = parseInt(document.getElementById('platform_select').value);
-      apiPost({{
-        action: 'RESTORE_AUTO',
-        station: stId,
-        platform: pfId
-      }}).then(() => {{
-        showToast(`🟢 已恢复 [${{stId}}号站] ${{pfId}}号台为自动行车时刻表`, 'success');
-      }});
-    }}
-
-    function triggerEmergency(active) {{
-      const stId = parseInt(document.getElementById('emergency_station').value);
-      apiPost({{
-        action: 'TRIGGER_EMERGENCY',
-        station: stId,
-        active: active,
-        message: document.getElementById('emergency_msg').value
-      }}).then(() => showToast(active ? `🚨 车站 [${{stId}}] 紧急广播模式已下发！` : '✅ 应急状态已解除！', active ? 'danger' : 'success'));
-    }}
-
-    function setTicker() {{
-      apiPost({{
-        action: 'SET_TICKER',
-        text: document.getElementById('ticker_text').value
-      }}).then(() => showToast('📢 跑马灯滚动公告已更新！', 'success'));
-    }}
-
-    function setLineOutOfService() {{
-      apiPost({{ action: 'LINE_OUT_OF_SERVICE' }}).then(() => {{
-        showToast('⛔ 全线所有车站已切换为“退出服务”状态！', 'danger');
-      }});
-    }}
-
-    function restoreAllAuto() {{
-      apiPost({{ action: 'RESTORE_ALL_AUTO' }}).then(() => {{
-        showToast('🟢 已恢复全线各站台为自动行车时刻表！', 'success');
-      }});
-    }}
-  </script>
-</body>
-</html>
-"""
+    return {
+        "line_config": selected_line,
+        "active_line_id": selected_line["line_id"],
+        "lines": [{"line_id": lid, "name_cn": lcfg.get("name_cn", f"Line {lid}")} for lid, lcfg in LINES_REGISTRY.items()]
+    }
+
+@app.get("/control")
+async def control_panel():
+    return FileResponse("control.html", headers={
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0"
+    })
 
 # ===== 8. 挂载本地静态文件目录（直接在 8080 端口提供 index.html 和视频） =====
 app.mount("/", StaticFiles(directory=".", html=True), name="static")

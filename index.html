@@ -118,11 +118,11 @@
       backdrop-filter: blur(4px);
     }
 
-    /* 滚动字幕 */
+    /* 滚动字幕（单条跑马灯：从右向左完整滚出，无闪现） */
     .ticker { height: 13vh; background: #158CDC; display: flex; align-items: center; overflow: hidden; flex-shrink: 0; }
-    .ticker-track { display: flex; white-space: nowrap; animation: scroll 30s linear infinite; }
-    .ticker-text { font-size: 3.5vw; font-weight: 900; color: #ffe600; letter-spacing: 0.15vw; padding-right: 8vw; }
-    @keyframes scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+    .ticker-track { display: flex; white-space: nowrap; padding-left: 100%; flex-shrink: 0; animation: scroll 25s linear infinite; }
+    .ticker-text { font-size: 3.5vw; font-weight: 900; color: #ffe600; letter-spacing: 0.15vw; }
+    @keyframes scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
   </style>
 </head>
 <body>
@@ -231,8 +231,7 @@
     </div>
     <div class="ticker">
       <div class="ticker-track">
-        <span class="ticker-text" id="ticker-1">欢迎乘坐西安地铁三号线！</span>
-        <span class="ticker-text" id="ticker-2">欢迎乘坐西安地铁三号线！</span>
+        <span class="ticker-text" id="ticker-text">欢迎乘坐西安地铁！请先下后上，注意站台间隙。</span>
       </div>
     </div>
   </div>
@@ -395,8 +394,8 @@
 
       // 4. 更新底部跑马灯
       if (data.ticker) {
-        document.getElementById('ticker-1').textContent = data.ticker;
-        document.getElementById('ticker-2').textContent = data.ticker;
+        const el = document.getElementById('ticker-text') || document.getElementById('ticker-1');
+        if (el) el.textContent = data.ticker;
       }
 
       // 5. 全线视频母钟中央播控联动（支持精准切片与进度 Seek 对齐）
@@ -438,8 +437,8 @@
 
       // 6. 紧急疏散联动判断
       if (data.emergency && data.emergency.active) {
-        document.getElementById('ticker-1').textContent = `🚨 【紧急广播】${data.emergency.message}`;
-        document.getElementById('ticker-2').textContent = `🚨 【紧急广播】${data.emergency.message}`;
+        const el = document.getElementById('ticker-text') || document.getElementById('ticker-1');
+        if (el) el.textContent = `🚨 【紧急广播】${data.emergency.message}`;
       }
     }
 
